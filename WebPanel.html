@@ -350,8 +350,6 @@
         </div>
         <div class="nav-section">
           <div class="nav-label">ADMINISTRACIÓN</div>
-          <a class="nav-item" data-tab="reportes" onclick="switchTab('reportes', this)"><i class="fa-solid fa-chart-line"></i> Reportes</a>
-          <a class="nav-item" data-tab="configuracion" onclick="switchTab('configuracion', this)"><i class="fa-solid fa-gear"></i> Configuración</a>
           <a class="nav-item" data-tab="usuarios" onclick="switchTab('usuarios', this)"><i class="fa-solid fa-users"></i> Usuarios</a>
           <a class="nav-item" data-tab="auditoria" onclick="switchTab('auditoria', this)"><i class="fa-solid fa-shield-halved"></i> Auditoría</a>
         </div>
@@ -586,22 +584,64 @@
           <div id="resumenEjecucionesCard"></div>
         </div>
 
-        <!-- MÓDULOS EN DESARROLLO -->
-        <div id="view-reportes" class="view-content" style="display:none;">
-          <div class="header"><h1>Reportes</h1></div>
-          <div class="card"><p class="placeholder-empty">Módulo de reportes en desarrollo.</p></div>
-        </div>
-        <div id="view-configuracion" class="view-content" style="display:none;">
-          <div class="header"><h1>Configuración</h1></div>
-          <div class="card"><p class="placeholder-empty">Módulo de configuración en desarrollo.</p></div>
-        </div>
+        <!-- USUARIOS -->
         <div id="view-usuarios" class="view-content" style="display:none;">
           <div class="header"><h1>Usuarios</h1></div>
-          <div class="card"><p class="placeholder-empty">Gestión de usuarios en desarrollo.</p></div>
+
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-user-plus"></i> Nuevo usuario</h2></div>
+            <div class="content-grid">
+              <div class="form-group">
+                <label class="form-label">Usuario</label>
+                <input id="nuevoUsuarioNombre" type="text" class="form-input" placeholder="ej. jperez">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Cargo</label>
+                <input id="nuevoUsuarioCargo" type="text" class="form-input" placeholder="ej. Analista">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <input id="nuevoUsuarioPassword" type="password" class="form-input" placeholder="Mínimo 4 caracteres">
+              </div>
+            </div>
+            <button class="btn btn-orange" onclick="crearUsuarioUI()"><i class="fa-solid fa-plus"></i> Crear usuario</button>
+            <div id="statusUsuarios" class="status-msg"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-users"></i> Usuarios registrados</h2>
+              <button class="card-refresh" onclick="cargarUsuarios()" title="Refrescar"><i class="fa-solid fa-rotate"></i></button>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr><th>Usuario</th><th>Cargo</th><th>Estado</th><th>Acciones</th></tr>
+                </thead>
+                <tbody id="usuariosBody"><tr><td colspan="4">Cargando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
+
+        <!-- AUDITORÍA -->
         <div id="view-auditoria" class="view-content" style="display:none;">
           <div class="header"><h1>Auditoría</h1></div>
-          <div class="card"><p class="placeholder-empty">Registro de auditoría en desarrollo.</p></div>
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-shield-halved"></i> Registro de acciones</h2>
+              <button class="card-refresh" onclick="cargarAuditoria()" title="Refrescar"><i class="fa-solid fa-rotate"></i></button>
+            </div>
+            <div class="info-banner">Muestra hasta las últimas 200 acciones registradas en Carátulas/Compilador y Tomos.</div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr><th>Fecha y hora</th><th>Usuario</th><th>Módulo</th><th>Acción</th></tr>
+                </thead>
+                <tbody id="auditoriaBody"><tr><td colspan="4">Cargando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- RESUMEN DE EJECUCIONES: CARATULAS Y COMPILADOS -->
@@ -753,7 +793,7 @@
     // NAVEGACIÓN
     // ============================
     const VISTAS_MODULO = ['caratulas', 'compilador', 'tomos'];
-    const TODAS_LAS_VISTAS = ['inicio', 'modulos', 'cola', 'historial', 'reportes', 'configuracion', 'usuarios', 'auditoria'];
+    const TODAS_LAS_VISTAS = ['inicio', 'modulos', 'cola', 'historial', 'usuarios', 'auditoria'];
 
     function switchTab(tabName, element) {
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -769,11 +809,12 @@
         if (el) el.style.display = (v === vistaDestino) ? 'block' : 'none';
       });
 
+      const vistasSinResumen = ['cola', 'historial', 'usuarios', 'auditoria'];
       const resumenGlobal = document.getElementById('resumenGlobalCard');
-      resumenGlobal.style.display = (vistaDestino === 'cola' || vistaDestino === 'historial') ? 'none' : 'block';
+      resumenGlobal.style.display = vistasSinResumen.includes(vistaDestino) ? 'none' : 'block';
 
       const resumenTomos = document.getElementById('resumenTomosCard');
-      resumenTomos.style.display = (vistaDestino === 'cola' || vistaDestino === 'historial') ? 'none' : 'block';
+      resumenTomos.style.display = vistasSinResumen.includes(vistaDestino) ? 'none' : 'block';
 
       if (VISTAS_MODULO.includes(tabName)) {
         document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
@@ -800,6 +841,8 @@
       }
 
       if (vistaDestino === 'cola') renderCola();
+      if (vistaDestino === 'usuarios') cargarUsuarios();
+      if (vistaDestino === 'auditoria') cargarAuditoria();
     }
 
     // ============================
@@ -1116,6 +1159,106 @@
         </tr>
       `).join('');
       resumen.textContent = `Mostrando ${colaSolicitudes.length} solicitud${colaSolicitudes.length === 1 ? '' : 'es'}`;
+    }
+
+    // ============================
+    // USUARIOS
+    // ============================
+    async function cargarUsuarios() {
+      const body = document.getElementById('usuariosBody');
+      try {
+        const usuarios = await callBackend('listarUsuarios');
+        if (!usuarios.length) {
+          body.innerHTML = '<tr><td colspan="4">Aún no hay usuarios registrados.</td></tr>';
+          return;
+        }
+        body.innerHTML = usuarios.map(u => `
+          <tr>
+            <td>${u.usuario}</td>
+            <td><input type="text" class="form-input" value="${u.cargo || ''}" id="cargo-${u.usuario}" style="max-width:160px;"></td>
+            <td><span class="pill ${u.activo ? 'pill-ok' : 'pill-cancelado'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
+            <td>
+              <button class="btn btn-secondary" onclick="guardarCargoUI('${u.usuario}')">Guardar cargo</button>
+              <button class="btn btn-blue" onclick="cambiarPasswordUI('${u.usuario}')">Cambiar clave</button>
+              <button class="btn ${u.activo ? 'btn-danger' : 'btn-green'}" onclick="toggleActivoUI('${u.usuario}', ${!u.activo})">${u.activo ? 'Desactivar' : 'Activar'}</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        body.innerHTML = `<tr><td colspan="4">Error al cargar usuarios: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function crearUsuarioUI() {
+      const usuario = document.getElementById('nuevoUsuarioNombre').value.trim();
+      const cargo = document.getElementById('nuevoUsuarioCargo').value.trim();
+      const password = document.getElementById('nuevoUsuarioPassword').value;
+      try {
+        const res = await callBackend('crearUsuario', usuario, password, cargo);
+        showSuccess('statusUsuarios', res.mensaje);
+        document.getElementById('nuevoUsuarioNombre').value = '';
+        document.getElementById('nuevoUsuarioCargo').value = '';
+        document.getElementById('nuevoUsuarioPassword').value = '';
+        cargarUsuarios();
+      } catch (err) {
+        showError('statusUsuarios', err.message);
+      }
+    }
+
+    async function guardarCargoUI(usuario) {
+      const nuevoCargo = document.getElementById(`cargo-${usuario}`).value.trim();
+      try {
+        const res = await callBackend('actualizarCargoUsuario', usuario, nuevoCargo);
+        showSuccess('statusUsuarios', res.mensaje);
+      } catch (err) {
+        showError('statusUsuarios', err.message);
+      }
+    }
+
+    async function cambiarPasswordUI(usuario) {
+      const nuevaPassword = prompt(`Nueva contraseña para "${usuario}" (mínimo 4 caracteres):`);
+      if (!nuevaPassword) return;
+      try {
+        const res = await callBackend('cambiarPasswordUsuario', usuario, nuevaPassword);
+        showSuccess('statusUsuarios', res.mensaje);
+      } catch (err) {
+        showError('statusUsuarios', err.message);
+      }
+    }
+
+    async function toggleActivoUI(usuario, nuevoEstado) {
+      try {
+        const res = await callBackend('cambiarEstadoUsuario', usuario, nuevoEstado);
+        showSuccess('statusUsuarios', res.mensaje);
+        cargarUsuarios();
+      } catch (err) {
+        showError('statusUsuarios', err.message);
+      }
+    }
+
+    // ============================
+    // AUDITORÍA
+    // ============================
+    async function cargarAuditoria() {
+      const body = document.getElementById('auditoriaBody');
+      body.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+      try {
+        const registros = await callBackend('obtenerAuditoria');
+        if (!registros.length) {
+          body.innerHTML = '<tr><td colspan="4">Aún no hay registros de auditoría.</td></tr>';
+          return;
+        }
+        body.innerHTML = registros.map(r => `
+          <tr>
+            <td>${r.fecha}</td>
+            <td>${r.usuario}</td>
+            <td><span class="pill-tipo">${r.modulo}</span></td>
+            <td>${r.accion}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        body.innerHTML = `<tr><td colspan="4">Error al cargar auditoría: ${err.message}</td></tr>`;
+      }
     }
 
     function seleccionarTodoCola() {
