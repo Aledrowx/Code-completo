@@ -397,6 +397,11 @@
                   <i class="fa-solid fa-folder-open"></i> Cargar origen (C2)
                 </button>
                 <div class="tree-container mt-10"><ul id="treeCaratulas"><li>Esperando carga de carpetas...</li></ul></div>
+                <!-- Botones de selección para Carátulas -->
+                <div class="row mt-10">
+                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeCaratulas', true)">Seleccionar todo</button>
+                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeCaratulas', false)">Quitar selección</button>
+                </div>
 
                 <div class="form-group mt-10">
                   <label class="form-label">Plantilla</label>
@@ -440,6 +445,11 @@
                   <button class="btn btn-blue" onclick="probarServidor('Compilador')">Probar servidor</button>
                 </div>
                 <div class="tree-container mt-10"><ul id="treeCompilador"><li>Esperando carga de carpetas...</li></ul></div>
+                <!-- Botones de selección para Compilador -->
+                <div class="row mt-10">
+                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeCompilador', true)">Seleccionar todo</button>
+                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeCompilador', false)">Quitar selección</button>
+                </div>
 
                 <div class="form-group mt-10">
                   <label class="form-label">Si ya existe un compilado</label>
@@ -465,6 +475,11 @@
                   <button class="btn btn-blue" onclick="probarServidor('Tomos')">Probar servidor</button>
                 </div>
                 <div class="tree-container mt-10"><ul id="treeTomos"><li>Esperando carga de carpetas...</li></ul></div>
+                <!-- Botones de selección para Tomos -->
+                <div class="row mt-10">
+                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeTomos', true)">Seleccionar todo</button>
+                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeTomos', false)">Quitar selección</button>
+                </div>
 
                 <div class="form-group mt-10">
                   <label class="form-label">Selección actual</label>
@@ -656,6 +671,9 @@
     let historialTomosPagina = 1;
     const HISTORIAL_TOMOS_POR_PAGINA = 5;
 
+    // NUEVO: variable global para selección con Shift
+    let ultimoCheckClicado = {};
+
     // ============================
     // LOGIN
     // ============================
@@ -836,6 +854,41 @@
       }
     }
 
+    // Función para manejar selección con Shift y cascada
+    function manejarClicCheckbox(e, chk) {
+      const contenedor = chk.closest('.tree-container');
+      const rootUl = contenedor ? contenedor.querySelector('ul') : null;
+      const treeId = rootUl ? rootUl.id : null;
+      if (!treeId) return;
+
+      // Selección en rango con Shift
+      if (e.shiftKey && ultimoCheckClicado[treeId]) {
+        const todos = Array.from(document.querySelectorAll(`#${treeId} .folder-chk, #${treeId} .pdf-chk`));
+        const idxActual = todos.indexOf(chk);
+        const idxAnterior = todos.indexOf(ultimoCheckClicado[treeId]);
+        if (idxActual !== -1 && idxAnterior !== -1) {
+          const [ini, fin] = idxActual < idxAnterior ? [idxActual, idxAnterior] : [idxAnterior, idxActual];
+          for (let i = ini; i <= fin; i++) todos[i].checked = chk.checked;
+        }
+      }
+
+      // Si es carpeta: marcar/desmarcar en cascada los hijos cargados
+      if (chk.classList.contains('folder-chk')) {
+        const li = chk.closest('li');
+        if (li) li.querySelectorAll('.folder-chk, .pdf-chk').forEach(hijo => { hijo.checked = chk.checked; });
+      }
+
+      ultimoCheckClicado[treeId] = chk;
+      if (treeId === 'treeTomos') actualizarContadorPaginas();
+    }
+
+    // Seleccionar/quitar selección de todo un árbol
+    function seleccionarTodoArbol(treeId, valor) {
+      document.querySelectorAll(`#${treeId} .folder-chk, #${treeId} .pdf-chk`).forEach(c => c.checked = valor);
+      if (treeId === 'treeTomos') actualizarContadorPaginas();
+    }
+
+    // Función para crear nodo de carpeta (actualizada con addEventListener y cascada)
     function crearNodoCarpeta(ul, carpeta, esAnexo, mostrarPdfs) {
       const li = document.createElement('li');
       const toggle = document.createElement('span');
@@ -853,20 +906,30 @@
         const newUl = document.createElement('ul');
         li.appendChild(newUl);
         await pedirSubcarpetas(carpeta.id, newUl, false, mostrarPdfs, carpeta.name);
+
+        // Si la carpeta padre ya estaba marcada, marcar en cascada lo recién cargado
+        if (chk.checked) {
+          newUl.querySelectorAll('.folder-chk, .pdf-chk').forEach(c => c.checked = true);
+          if (mostrarPdfs) actualizarContadorPaginas();
+        }
       };
+
       const label = document.createElement('label');
       const chk = document.createElement('input');
       chk.type = 'checkbox';
       chk.className = 'folder-chk';
       chk.value = carpeta.id;
       chk.setAttribute('data-name', carpeta.name);
+      chk.addEventListener('click', (e) => manejarClicCheckbox(e, chk)); // NUEVO
       label.appendChild(chk);
       label.appendChild(document.createTextNode(' 📁 ' + carpeta.name));
+
       li.appendChild(toggle);
       li.appendChild(label);
       ul.appendChild(li);
     }
 
+    // Función para crear nodo de PDF (actualizada con addEventListener)
     function crearNodoPdf(ul, pdf, carpetaOrigenNombre, carpetaOrigenId) {
       const li = document.createElement('li');
       li.className = 'pdf-item';
@@ -880,11 +943,11 @@
       chk.setAttribute('data-carpeta', carpetaOrigenNombre || '');
       chk.setAttribute('data-carpeta-id', carpetaOrigenId || '');
       chk.onchange = actualizarContadorPaginas;
+      chk.addEventListener('click', (e) => manejarClicCheckbox(e, chk)); // NUEVO
 
       const texto = document.createElement('span');
       texto.className = 'pdf-label-text' + (pdf.paginas ? '' : ' pdf-sin-dato');
       texto.textContent = ' 📄 ' + pdf.name + (pdf.paginas ? ` (${pdf.paginas} pág.)` : ' (¿? pág.)');
-
       label.appendChild(chk);
       label.appendChild(texto);
       li.appendChild(label);
