@@ -48,9 +48,7 @@
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-    /* ==========================================
-       LOGIN
-       ========================================== */
+    /* LOGIN */
     .login-container {
       display: flex; justify-content: center; align-items: center; min-height: 100vh;
       background: radial-gradient(circle at top, #fff, var(--bg-main)); padding: 20px;
@@ -83,9 +81,7 @@
     .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
     .login-footer { margin-top: 24px; font-size: 12px; color: var(--text-light); }
 
-    /* ==========================================
-       TOPBAR
-       ========================================== */
+    /* TOPBAR */
     .topbar {
       height: 60px; background: var(--bg-card); border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
@@ -107,9 +103,7 @@
     }
     .topbar-user { display: flex; align-items: center; gap: 10px; }
 
-    /* ==========================================
-       DASHBOARD LAYOUT
-       ========================================== */
+    /* DASHBOARD LAYOUT */
     .dashboard { display: flex; min-height: calc(100vh - 60px); }
     .sidebar {
       width: 240px; background: var(--bg-card); border-right: 1px solid var(--border);
@@ -216,12 +210,35 @@
     }
     ul { list-style: none; padding-left: 18px; }
     li { margin: 3px 0; }
-    .folder-toggle { cursor: pointer; color: var(--primary); font-weight: 700; }
+    .folder-toggle { cursor: pointer; color: var(--primary); font-weight: 700; flex-shrink: 0; }
     .folder-chk { margin-right: 6px; }
     .pdf-item { padding-left: 4px; }
     .pdf-chk { margin-right: 6px; }
     .pdf-label-text { color: var(--text-muted); }
     .pdf-label-text.pdf-sin-dato { color: var(--warning); font-style: italic; }
+
+    /* Menú de selección por capas (ANEXOS) */
+    .folder-node { display: flex; align-items: center; gap: 4px; width: 100%; }
+    .folder-node > label { display: flex; align-items: center; flex: 1; min-width: 0; overflow: hidden; }
+    .folder-node > label > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .anexo-menu { position: relative; display: inline-block; margin-left: auto; flex-shrink: 0; padding-left: 8px; }
+    .anexo-menu-btn {
+      background: var(--bg-subtle); border: 1px solid var(--border-strong); color: var(--text-muted);
+      font-size: 11px; padding: 1px 7px; border-radius: 999px; cursor: pointer; font-weight: 600; white-space: nowrap;
+    }
+    .anexo-menu-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+    .anexo-menu-list {
+      display: none; position: absolute; top: 100%; right: 0; z-index: 30; margin-top: 4px;
+      background: #fff; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md); min-width: 220px; padding: 4px;
+    }
+    .anexo-menu-list.open { display: block; }
+    .anexo-menu-item {
+      display: block; width: 100%; text-align: left; padding: 6px 10px; border: none; background: none;
+      font-size: 12.5px; color: var(--text-main); border-radius: 4px; cursor: pointer; white-space: nowrap;
+    }
+    .anexo-menu-item:hover { background: var(--primary-light); color: var(--primary); }
+    .anexo-menu-empty { padding: 6px 10px; font-size: 12px; color: var(--text-light); white-space: nowrap; }
 
     .status-msg { display: none; padding: 10px; border-radius: var(--radius-sm); margin-top: 12px; }
     .msg-success { background: var(--success-bg); color: var(--success); border: 1px solid #bbf7d0; }
@@ -259,28 +276,15 @@
     .icon-btn:hover { color: var(--primary); }
 
     .mt-10 { margin-top: 10px; }
+    .mb-10 { margin-bottom: 10px; }
     .mt-20 { margin-top: 20px; }
     .row { display: flex; gap: 10px; }
     .row > * { flex: 1; }
-
-    /* Selector de nivel de profundidad con cuadros */
-    .nivel-selector { display: flex; flex-wrap: wrap; gap: 8px; }
-    .nivel-option { cursor: pointer; margin: 0; }
-    .nivel-option input[type="radio"] { display: none; }
-    .nivel-box {
-      display: inline-block; padding: 8px 16px; border: 1px solid var(--border-strong);
-      border-radius: var(--radius-sm); background: #fff; color: var(--text-muted);
-      font-weight: 600; font-size: 13px; transition: all .15s; text-align: center; min-width: 70px;
-    }
-    .nivel-option input[type="radio"]:checked + .nivel-box {
-      background: var(--primary-light); border-color: var(--primary); color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(37,99,235,0.1);
-    }
   </style>
 </head>
 <body>
 
-  <!-- ==================== LOGIN ==================== -->
+  <!-- LOGIN -->
   <div id="loginView" class="login-container">
     <div class="login-card">
       <div class="login-icon"><i class="fa-solid fa-lock"></i></div>
@@ -306,10 +310,9 @@
     </div>
   </div>
 
-  <!-- ==================== DASHBOARD ==================== -->
+  <!-- DASHBOARD -->
   <div id="dashboardView" style="display:none;">
 
-    <!-- Barra superior -->
     <div class="topbar">
       <div class="topbar-left">
         <button class="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('sidebar-hidden')"><i class="fa-solid fa-bars"></i></button>
@@ -331,7 +334,6 @@
     </div>
 
     <div class="dashboard">
-      <!-- Sidebar -->
       <aside class="sidebar">
         <div class="nav-section">
           <div class="nav-label">INICIO</div>
@@ -348,7 +350,7 @@
           </a>
           <a class="nav-item" data-tab="historial" onclick="switchTab('historial', this)"><i class="fa-solid fa-clock-rotate-left"></i> Historial de Ejecuciones</a>
         </div>
-        <div class="nav-section">
+        <div class="nav-section" id="seccionAdministracion" data-solo-jefe style="display:none;">
           <div class="nav-label">ADMINISTRACIÓN</div>
           <a class="nav-item" data-tab="usuarios" onclick="switchTab('usuarios', this)"><i class="fa-solid fa-users"></i> Usuarios</a>
           <a class="nav-item" data-tab="auditoria" onclick="switchTab('auditoria', this)"><i class="fa-solid fa-shield-halved"></i> Auditoría</a>
@@ -358,7 +360,6 @@
         </div>
       </aside>
 
-      <!-- Contenido principal -->
       <main class="main-content">
 
         <!-- INICIO -->
@@ -369,12 +370,11 @@
           </div>
         </div>
 
-        <!-- CARÁTULAS / COMPILAR / TOMOS -->
+        <!-- MÓDULOS PRINCIPALES -->
         <div id="view-modulos" class="view-content" style="display:none;">
           <div class="header"><h1>Panel Maestro Integrado</h1></div>
 
           <div class="content-grid">
-            <!-- Columna izquierda: formulario -->
             <div class="card">
               <div class="stepper">
                 <div class="step" data-step="caratulas" onclick="switchTab('caratulas', document.querySelector('.nav-item[data-tab=caratulas]'))">
@@ -395,11 +395,6 @@
                   <i class="fa-solid fa-folder-open"></i> Cargar origen (C2)
                 </button>
                 <div class="tree-container mt-10"><ul id="treeCaratulas"><li>Esperando carga de carpetas...</li></ul></div>
-                <!-- Botones de selección para Carátulas -->
-                <div class="row mt-10">
-                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeCaratulas', true)">Seleccionar todo</button>
-                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeCaratulas', false)">Quitar selección</button>
-                </div>
 
                 <div class="form-group mt-10">
                   <label class="form-label">Plantilla</label>
@@ -443,11 +438,6 @@
                   <button class="btn btn-blue" onclick="probarServidor('Compilador')">Probar servidor</button>
                 </div>
                 <div class="tree-container mt-10"><ul id="treeCompilador"><li>Esperando carga de carpetas...</li></ul></div>
-                <!-- Botones de selección para Compilador -->
-                <div class="row mt-10">
-                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeCompilador', true)">Seleccionar todo</button>
-                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeCompilador', false)">Quitar selección</button>
-                </div>
 
                 <div class="form-group mt-10">
                   <label class="form-label">Si ya existe un compilado</label>
@@ -473,11 +463,6 @@
                   <button class="btn btn-blue" onclick="probarServidor('Tomos')">Probar servidor</button>
                 </div>
                 <div class="tree-container mt-10"><ul id="treeTomos"><li>Esperando carga de carpetas...</li></ul></div>
-                <!-- Botones de selección para Tomos -->
-                <div class="row mt-10">
-                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeTomos', true)">Seleccionar todo</button>
-                  <button class="btn btn-secondary" onclick="seleccionarTodoArbol('treeTomos', false)">Quitar selección</button>
-                </div>
 
                 <div class="form-group mt-10">
                   <label class="form-label">Selección actual</label>
@@ -488,36 +473,6 @@
                 <div class="form-group mt-10">
                   <label class="form-label">Tomos específicos (vacío = todos)</label>
                   <input id="numerosTomos" type="text" class="form-input" placeholder="Ejemplo: 1, 3, 5">
-                </div>
-
-                <!-- Selector de nivel con cuadros -->
-                <div class="form-group">
-                  <label class="form-label">Nivel de profundidad para proyección</label>
-                  <div class="nivel-selector">
-                    <label class="nivel-option">
-                      <input type="radio" name="nivelProfundidad" value="general" checked>
-                      <span class="nivel-box">General</span>
-                    </label>
-                    <label class="nivel-option">
-                      <input type="radio" name="nivelProfundidad" value="1">
-                      <span class="nivel-box">Nivel 1</span>
-                    </label>
-                    <label class="nivel-option">
-                      <input type="radio" name="nivelProfundidad" value="2">
-                      <span class="nivel-box">Nivel 2</span>
-                    </label>
-                    <label class="nivel-option">
-                      <input type="radio" name="nivelProfundidad" value="3">
-                      <span class="nivel-box">Nivel 3</span>
-                    </label>
-                    <label class="nivel-option">
-                      <input type="radio" name="nivelProfundidad" value="4">
-                      <span class="nivel-box">Nivel 4</span>
-                    </label>
-                  </div>
-                  <div class="small" style="margin-top:4px; color: var(--text-light); font-size: 12px;">
-                    Elige hasta qué nivel de subcarpetas se incluirán al proyectar.
-                  </div>
                 </div>
 
                 <div class="form-group">
@@ -578,73 +533,65 @@
           </div>
         </div>
 
-        <!-- HISTORIAL / RESUMEN DE EJECUCIONES -->
+        <!-- HISTORIAL DE EJECUCIONES -->
         <div id="view-historial" class="view-content" style="display:none;">
           <div class="header"><h1>Historial de Ejecuciones</h1></div>
           <div id="resumenEjecucionesCard"></div>
         </div>
 
-        <!-- USUARIOS -->
+        <!-- VISTA USUARIOS -->
         <div id="view-usuarios" class="view-content" style="display:none;">
-          <div class="header"><h1>Usuarios</h1></div>
-
+          <div class="header"><h1>Gestión de Usuarios</h1></div>
+          
           <div class="card">
-            <div class="card-header"><h2><i class="fa-solid fa-user-plus"></i> Nuevo usuario</h2></div>
-            <div class="content-grid">
+            <h2><i class="fa-solid fa-user-plus"></i> Registrar Nuevo Usuario</h2>
+            <div class="row mt-10">
               <div class="form-group">
                 <label class="form-label">Usuario</label>
-                <input id="nuevoUsuarioNombre" type="text" class="form-input" placeholder="ej. jperez">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Cargo</label>
-                <input id="nuevoUsuarioCargo" type="text" class="form-input" placeholder="ej. Analista">
+                <input type="text" id="nuUsuario" class="form-input" placeholder="Ej. operador1">
               </div>
               <div class="form-group">
                 <label class="form-label">Contraseña</label>
-                <input id="nuevoUsuarioPassword" type="password" class="form-input" placeholder="Mínimo 4 caracteres">
+                <input type="password" id="nuPassword" class="form-input" placeholder="Mínimo 4 caracteres">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Rol / Cargo</label>
+                <select id="nuCargo" class="form-select">
+                  <option value="operador">operador</option>
+                  <option value="jefe">jefe</option>
+                </select>
               </div>
             </div>
-            <button class="btn btn-orange" onclick="crearUsuarioUI()"><i class="fa-solid fa-plus"></i> Crear usuario</button>
-            <div id="statusUsuarios" class="status-msg"></div>
+            <button class="btn btn-green mt-10" onclick="crearUsuarioUI()"><i class="fa-solid fa-check"></i> Crear Usuario</button>
+            <div id="nuStatus" class="status-msg"></div>
           </div>
 
           <div class="card">
             <div class="card-header">
-              <h2><i class="fa-solid fa-users"></i> Usuarios registrados</h2>
-              <button class="card-refresh" onclick="cargarUsuarios()" title="Refrescar"><i class="fa-solid fa-rotate"></i></button>
+              <h2><i class="fa-solid fa-users"></i> Usuarios Registrados</h2>
+              <button class="btn btn-blue" onclick="cargarUsuarios()"><i class="fa-solid fa-rotate"></i> Actualizar</button>
             </div>
-            <div class="table-container">
-              <table>
-                <thead>
-                  <tr><th>Usuario</th><th>Cargo</th><th>Estado</th><th>Acciones</th></tr>
-                </thead>
-                <tbody id="usuariosBody"><tr><td colspan="4">Cargando...</td></tr></tbody>
-              </table>
+            <div id="listaUsuariosContainer" class="table-container mt-10">
+              <p class="placeholder-empty">Cargando usuarios...</p>
             </div>
           </div>
         </div>
 
-        <!-- AUDITORÍA -->
+        <!-- VISTA AUDITORÍA -->
         <div id="view-auditoria" class="view-content" style="display:none;">
-          <div class="header"><h1>Auditoría</h1></div>
+          <div class="header"><h1>Auditoría del Sistema</h1></div>
           <div class="card">
             <div class="card-header">
-              <h2><i class="fa-solid fa-shield-halved"></i> Registro de acciones</h2>
-              <button class="card-refresh" onclick="cargarAuditoria()" title="Refrescar"><i class="fa-solid fa-rotate"></i></button>
+              <h2><i class="fa-solid fa-shield-halved"></i> Registro de Actividades</h2>
+              <button class="btn btn-blue" onclick="cargarAuditoria()"><i class="fa-solid fa-rotate"></i> Actualizar</button>
             </div>
-            <div class="info-banner">Muestra hasta las últimas 200 acciones registradas en Carátulas/Compilador y Tomos.</div>
-            <div class="table-container">
-              <table>
-                <thead>
-                  <tr><th>Fecha y hora</th><th>Usuario</th><th>Módulo</th><th>Acción</th></tr>
-                </thead>
-                <tbody id="auditoriaBody"><tr><td colspan="4">Cargando...</td></tr></tbody>
-              </table>
+            <div id="listaAuditoriaContainer" class="table-container mt-10">
+              <p class="placeholder-empty">Cargando auditoría...</p>
             </div>
           </div>
         </div>
 
-        <!-- RESUMEN DE EJECUCIONES: CARATULAS Y COMPILADOS -->
+        <!-- RESUMEN CARATULAS Y COMPILADOS (SOLO VISIBLE EN INICIO, MÓDULOS E HISTORIAL) -->
         <div class="card" id="resumenGlobalCard">
           <div class="card-header">
             <h2><i class="fa-regular fa-clipboard"></i> Resumen de Ejecuciones (CARATULAS Y COMPILADOS)</h2>
@@ -667,7 +614,7 @@
           </div>
         </div>
 
-        <!-- NUEVO: Resumen de Ejecuciones (TOMOS) -->
+        <!-- RESUMEN TOMOS (SOLO VISIBLE EN INICIO, MÓDULOS E HISTORIAL) -->
         <div class="card" id="resumenTomosCard">
           <div class="card-header">
             <h2><i class="fa-regular fa-clipboard"></i> Resumen de Ejecuciones (TOMOS)</h2>
@@ -711,12 +658,7 @@
     let historialTomosPagina = 1;
     const HISTORIAL_TOMOS_POR_PAGINA = 5;
 
-    // NUEVO: variable global para selección con Shift
-    let ultimoCheckClicado = {};
-
-    // ============================
     // LOGIN
-    // ============================
     async function handleLogin() {
       const usuario = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
@@ -732,6 +674,9 @@
         document.getElementById('userName').textContent = res.usuario;
         document.getElementById('userRole').textContent = res.rol;
         document.getElementById('userAvatar').textContent = res.usuario.charAt(0).toUpperCase();
+
+        document.getElementById('seccionAdministracion').style.display = (res.rol.toLowerCase() === 'jefe') ? 'block' : 'none';
+
         cargarPlantillas();
         cargarHistorial();
         cargarHistorialTomos();
@@ -742,6 +687,13 @@
         setBusy('loginBtn', false);
       }
     }
+
+    document.getElementById('username').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); handleLogin(); }
+    });
+    document.getElementById('password').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); handleLogin(); }
+    });
 
     function logout() {
       usuarioActual = null;
@@ -754,9 +706,7 @@
       document.getElementById('password').value = '';
     }
 
-    // ============================
     // UTILIDADES
-    // ============================
     function callBackend(funcName, ...args) {
       return new Promise((resolve, reject) => {
         google.script.run
@@ -789,13 +739,16 @@
       if (btn) btn.disabled = busy;
     }
 
-    // ============================
     // NAVEGACIÓN
-    // ============================
     const VISTAS_MODULO = ['caratulas', 'compilador', 'tomos'];
     const TODAS_LAS_VISTAS = ['inicio', 'modulos', 'cola', 'historial', 'usuarios', 'auditoria'];
+    const VISTAS_CON_RESUMEN = ['inicio', 'modulos', 'historial'];
 
     function switchTab(tabName, element) {
+      if ((tabName === 'usuarios' || tabName === 'auditoria') && rolActual && rolActual.toLowerCase() !== 'jefe') {
+        return;
+      }
+
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       const navKey = VISTAS_MODULO.includes(tabName) ? tabName : tabName;
       const navEl = element && element.classList && element.classList.contains('nav-item')
@@ -809,12 +762,12 @@
         if (el) el.style.display = (v === vistaDestino) ? 'block' : 'none';
       });
 
-      const vistasSinResumen = ['cola', 'historial', 'usuarios', 'auditoria'];
+      const mostrarResumenes = VISTAS_CON_RESUMEN.includes(vistaDestino);
       const resumenGlobal = document.getElementById('resumenGlobalCard');
-      resumenGlobal.style.display = vistasSinResumen.includes(vistaDestino) ? 'none' : 'block';
-
       const resumenTomos = document.getElementById('resumenTomosCard');
-      resumenTomos.style.display = vistasSinResumen.includes(vistaDestino) ? 'none' : 'block';
+      
+      resumenGlobal.style.display = mostrarResumenes ? 'block' : 'none';
+      resumenTomos.style.display = mostrarResumenes ? 'block' : 'none';
 
       if (VISTAS_MODULO.includes(tabName)) {
         document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
@@ -823,31 +776,148 @@
         document.querySelector(`.step[data-step="${tabName}"]`)?.classList.add('active');
       }
 
-      if (vistaDestino === 'historial') {
-        document.getElementById('resumenEjecucionesCard').appendChild(document.getElementById('resumenGlobalCard'));
-        document.getElementById('resumenGlobalCard').style.display = 'block';
-        document.getElementById('resumenEjecucionesCard').appendChild(document.getElementById('resumenTomosCard'));
-        document.getElementById('resumenTomosCard').style.display = 'block';
+      if (vistaDestino === 'usuarios') {
+        cargarUsuarios();
+      } else if (vistaDestino === 'auditoria') {
+        cargarAuditoria();
+      } else if (vistaDestino === 'historial') {
+        document.getElementById('resumenEjecucionesCard').appendChild(resumenGlobal);
+        resumenGlobal.style.display = 'block';
+        document.getElementById('resumenEjecucionesCard').appendChild(resumenTomos);
+        resumenTomos.style.display = 'block';
         cargarHistorial();
         cargarHistorialTomos();
       } else {
         const main = document.querySelector('.main-content');
-        if (main && document.getElementById('resumenGlobalCard').parentElement !== main) {
-          main.appendChild(document.getElementById('resumenGlobalCard'));
+        if (main && resumenGlobal.parentElement !== main) {
+          main.appendChild(resumenGlobal);
         }
-        if (main && document.getElementById('resumenTomosCard').parentElement !== main) {
-          main.appendChild(document.getElementById('resumenTomosCard'));
+        if (main && resumenTomos.parentElement !== main) {
+          main.appendChild(resumenTomos);
         }
       }
 
       if (vistaDestino === 'cola') renderCola();
-      if (vistaDestino === 'usuarios') cargarUsuarios();
-      if (vistaDestino === 'auditoria') cargarAuditoria();
     }
 
-    // ============================
-    // CARGA DE DATOS
-    // ============================
+    // GESTIÓN DE USUARIOS
+    async function crearUsuarioUI() {
+      const usuario = document.getElementById('nuUsuario').value.trim();
+      const password = document.getElementById('nuPassword').value;
+      const cargo = document.getElementById('nuCargo').value;
+
+      if (!usuario || password.length < 4) {
+        return showError('nuStatus', 'Ingrese un usuario y una contraseña de al menos 4 caracteres.');
+      }
+
+      showWarning('nuStatus', 'Creando usuario...');
+      try {
+        const res = await callBackend('crearUsuario', usuarioActual, usuario, password, cargo);
+        showSuccess('nuStatus', res.mensaje);
+        document.getElementById('nuUsuario').value = '';
+        document.getElementById('nuPassword').value = '';
+        cargarUsuarios();
+      } catch (err) {
+        showError('nuStatus', err.message);
+      }
+    }
+
+    async function cargarUsuarios() {
+      const container = document.getElementById('listaUsuariosContainer');
+      container.innerHTML = '<p>Cargando lista de usuarios...</p>';
+      try {
+        const usuarios = await callBackend('listarUsuarios', usuarioActual);
+        if (!usuarios || !usuarios.length) {
+          container.innerHTML = '<p class="placeholder-empty">No hay usuarios registrados.</p>';
+          return;
+        }
+        let html = `<table>
+          <thead>
+            <tr><th>Usuario</th><th>Cargo</th><th>Estado</th><th>Acciones</th></tr>
+          </thead>
+          <tbody>`;
+        usuarios.forEach(u => {
+          html += `<tr>
+            <td><b>${u.usuario}</b></td>
+            <td>${u.cargo}</td>
+            <td><span class="pill ${u.activo ? 'pill-ok' : 'pill-cancelado'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
+            <td>
+              <button class="btn btn-secondary" onclick="guardarCargoUI('${u.usuario}')">Cambiar cargo</button>
+              <button class="btn btn-secondary" onclick="cambiarPasswordUI('${u.usuario}')">Contraseña</button>
+              <button class="btn ${u.activo ? 'btn-danger' : 'btn-green'}" onclick="toggleActivoUI('${u.usuario}', ${!u.activo})">${u.activo ? 'Desactivar' : 'Activar'}</button>
+            </td>
+          </tr>`;
+        });
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+      } catch (err) {
+        container.innerHTML = `<p style="color:var(--danger)">Error: ${err.message}</p>`;
+      }
+    }
+
+    async function guardarCargoUI(usuarioObjetivo) {
+      const nuevoCargo = prompt('Ingrese el nuevo cargo/rol (ej. jefe, operador):');
+      if (!nuevoCargo) return;
+      try {
+        const res = await callBackend('actualizarCargoUsuario', usuarioActual, usuarioObjetivo, nuevoCargo);
+        alert(res.mensaje);
+        cargarUsuarios();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    async function cambiarPasswordUI(usuarioObjetivo) {
+      const nuevaPassword = prompt('Ingrese la nueva contraseña (mínimo 4 caracteres):');
+      if (!nuevaPassword) return;
+      try {
+        const res = await callBackend('cambiarPasswordUsuario', usuarioActual, usuarioObjetivo, nuevaPassword);
+        alert(res.mensaje);
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    async function toggleActivoUI(usuarioObjetivo, nuevoEstado) {
+      if (!confirm(`¿Seguro que deseas ${nuevoEstado ? 'activar' : 'desactivar'} a ${usuarioObjetivo}?`)) return;
+      try {
+        const res = await callBackend('cambiarEstadoUsuario', usuarioActual, usuarioObjetivo, nuevoEstado);
+        alert(res.mensaje);
+        cargarUsuarios();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    async function cargarAuditoria() {
+      const container = document.getElementById('listaAuditoriaContainer');
+      container.innerHTML = '<p>Cargando auditoría...</p>';
+      try {
+        const registros = await callBackend('obtenerAuditoria', usuarioActual);
+        if (!registros || !registros.length) {
+          container.innerHTML = '<p class="placeholder-empty">No hay eventos en auditoría.</p>';
+          return;
+        }
+        let html = `<table>
+          <thead>
+            <tr><th>Fecha</th><th>Módulo / Origen</th><th>Usuario</th><th>Acción / Resultado</th></tr>
+          </thead>
+          <tbody>`;
+        registros.forEach(r => {
+          html += `<tr>
+            <td>${r.fecha}</td>
+            <td><b>${r.modulo}</b></td>
+            <td>${r.usuario}</td>
+            <td>${r.accion}</td>
+          </tr>`;
+        });
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+      } catch (err) {
+        container.innerHTML = `<p style="color:var(--danger)">Error: ${err.message}</p>`;
+      }
+    }
+
     async function cargarPlantillas() {
       try {
         const modelos = await callBackend('obtenerModelosDeCaratula', 'CARATULAS Y COMPILADOS');
@@ -869,7 +939,7 @@
     async function cargarArbol(treeId, celda, hoja) {
       const ul = document.getElementById(treeId);
       ul.innerHTML = '<li>Cargando carpetas...</li>';
-      const mostrarPdfs = (treeId === 'treeTomos');
+      const mostrarPdfs = true;
       try {
         const rootId = await callBackend('obtenerIdDesdeHoja', celda, hoja);
         await pedirSubcarpetas(rootId, ul, true, mostrarPdfs, '');
@@ -897,65 +967,36 @@
       }
     }
 
-    // Función para manejar selección con Shift y cascada
-    function manejarClicCheckbox(e, chk) {
-      const contenedor = chk.closest('.tree-container');
-      const rootUl = contenedor ? contenedor.querySelector('ul') : null;
-      const treeId = rootUl ? rootUl.id : null;
-      if (!treeId) return;
-
-      // Selección en rango con Shift
-      if (e.shiftKey && ultimoCheckClicado[treeId]) {
-        const todos = Array.from(document.querySelectorAll(`#${treeId} .folder-chk, #${treeId} .pdf-chk`));
-        const idxActual = todos.indexOf(chk);
-        const idxAnterior = todos.indexOf(ultimoCheckClicado[treeId]);
-        if (idxActual !== -1 && idxAnterior !== -1) {
-          const [ini, fin] = idxActual < idxAnterior ? [idxActual, idxAnterior] : [idxAnterior, idxActual];
-          for (let i = ini; i <= fin; i++) todos[i].checked = chk.checked;
-        }
+    async function alternarCarpeta(li, toggle, carpeta, mostrarPdfs) {
+      const subUl = li.querySelector(':scope > ul');
+      if (subUl) {
+        subUl.remove();
+        toggle.textContent = '[+]';
+        if (mostrarPdfs) actualizarContadorPaginas();
+        return null;
       }
-
-      // Si es carpeta: marcar/desmarcar en cascada los hijos cargados
-      if (chk.classList.contains('folder-chk')) {
-        const li = chk.closest('li');
-        if (li) li.querySelectorAll('.folder-chk, .pdf-chk').forEach(hijo => { hijo.checked = chk.checked; });
-      }
-
-      ultimoCheckClicado[treeId] = chk;
-      if (treeId === 'treeTomos') actualizarContadorPaginas();
+      toggle.textContent = '[-]';
+      const newUl = document.createElement('ul');
+      li.appendChild(newUl);
+      await pedirSubcarpetas(carpeta.id, newUl, false, mostrarPdfs, carpeta.name);
+      return newUl;
     }
 
-    // Seleccionar/quitar selección de todo un árbol
-    function seleccionarTodoArbol(treeId, valor) {
-      document.querySelectorAll(`#${treeId} .folder-chk, #${treeId} .pdf-chk`).forEach(c => c.checked = valor);
-      if (treeId === 'treeTomos') actualizarContadorPaginas();
+    async function asegurarCarpetaExpandida(li, toggle, carpeta, mostrarPdfs) {
+      const subUl = li.querySelector(':scope > ul');
+      if (subUl) return subUl;
+      return await alternarCarpeta(li, toggle, carpeta, mostrarPdfs);
     }
 
-    // Función para crear nodo de carpeta (actualizada con addEventListener y cascada)
     function crearNodoCarpeta(ul, carpeta, esAnexo, mostrarPdfs) {
       const li = document.createElement('li');
+      const nodeRow = document.createElement('div');
+      nodeRow.className = 'folder-node';
+
       const toggle = document.createElement('span');
       toggle.className = 'folder-toggle';
       toggle.textContent = '[+]';
-      toggle.onclick = async () => {
-        const subUl = li.querySelector('ul');
-        if (subUl) {
-          subUl.remove();
-          toggle.textContent = '[+]';
-          if (mostrarPdfs) actualizarContadorPaginas();
-          return;
-        }
-        toggle.textContent = '[-]';
-        const newUl = document.createElement('ul');
-        li.appendChild(newUl);
-        await pedirSubcarpetas(carpeta.id, newUl, false, mostrarPdfs, carpeta.name);
-
-        // Si la carpeta padre ya estaba marcada, marcar en cascada lo recién cargado
-        if (chk.checked) {
-          newUl.querySelectorAll('.folder-chk, .pdf-chk').forEach(c => c.checked = true);
-          if (mostrarPdfs) actualizarContadorPaginas();
-        }
-      };
+      toggle.onclick = () => alternarCarpeta(li, toggle, carpeta, mostrarPdfs);
 
       const label = document.createElement('label');
       const chk = document.createElement('input');
@@ -963,16 +1004,22 @@
       chk.className = 'folder-chk';
       chk.value = carpeta.id;
       chk.setAttribute('data-name', carpeta.name);
-      chk.addEventListener('click', (e) => manejarClicCheckbox(e, chk)); // NUEVO
+      const textoSpan = document.createElement('span');
+      textoSpan.textContent = ' 📁 ' + carpeta.name;
       label.appendChild(chk);
-      label.appendChild(document.createTextNode(' 📁 ' + carpeta.name));
+      label.appendChild(textoSpan);
 
-      li.appendChild(toggle);
-      li.appendChild(label);
+      nodeRow.appendChild(toggle);
+      nodeRow.appendChild(label);
+
+      if (esAnexo) {
+        nodeRow.appendChild(crearMenuAnexo(li, toggle, carpeta, mostrarPdfs));
+      }
+
+      li.appendChild(nodeRow);
       ul.appendChild(li);
     }
 
-    // Función para crear nodo de PDF (actualizada con addEventListener)
     function crearNodoPdf(ul, pdf, carpetaOrigenNombre, carpetaOrigenId) {
       const li = document.createElement('li');
       li.className = 'pdf-item';
@@ -986,11 +1033,11 @@
       chk.setAttribute('data-carpeta', carpetaOrigenNombre || '');
       chk.setAttribute('data-carpeta-id', carpetaOrigenId || '');
       chk.onchange = actualizarContadorPaginas;
-      chk.addEventListener('click', (e) => manejarClicCheckbox(e, chk)); // NUEVO
 
       const texto = document.createElement('span');
       texto.className = 'pdf-label-text' + (pdf.paginas ? '' : ' pdf-sin-dato');
       texto.textContent = ' 📄 ' + pdf.name + (pdf.paginas ? ` (${pdf.paginas} pág.)` : ' (¿? pág.)');
+
       label.appendChild(chk);
       label.appendChild(texto);
       li.appendChild(label);
@@ -1029,9 +1076,150 @@
       document.getElementById('bloqueNumeracionManual').style.display = checked ? 'block' : 'none';
     }
 
-    // ============================
-    // CONTADOR DE PÁGINAS (solo Tomos)
-    // ============================
+    // SELECCIÓN POR CAPAS (ANEXOS)
+    const anexoAnalisisCache = {};
+
+    async function analizarProfundidadYArchivos(folderId) {
+      const [subs, pdfs] = await Promise.all([
+        callBackend('obtenerSubcarpetas', folderId),
+        callBackend('obtenerArchivosPdfDeCarpeta', folderId)
+      ]);
+      let profundidad = 0;
+      let tieneArchivos = pdfs.length > 0;
+      if (subs.length) {
+        const resultados = await Promise.all(subs.map(s => analizarProfundidadYArchivos(s.id)));
+        profundidad = 1 + Math.max(...resultados.map(r => r.profundidad));
+        tieneArchivos = tieneArchivos || resultados.some(r => r.tieneArchivos);
+      }
+      return { profundidad, tieneArchivos };
+    }
+
+    function crearMenuAnexo(li, toggle, carpeta, mostrarPdfs) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'anexo-menu';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'anexo-menu-btn';
+      btn.textContent = 'Seleccionar ▾';
+
+      const menu = document.createElement('div');
+      menu.className = 'anexo-menu-list';
+      menu.innerHTML = '<div class="anexo-menu-empty">Cargando opciones...</div>';
+
+      btn.onclick = async (ev) => {
+        ev.stopPropagation();
+        const yaAbierto = menu.classList.contains('open');
+        cerrarMenusAnexo();
+        if (yaAbierto) return;
+        menu.classList.add('open');
+        await poblarMenuAnexo(menu, li, toggle, carpeta, mostrarPdfs);
+      };
+
+      wrapper.appendChild(btn);
+      wrapper.appendChild(menu);
+      return wrapper;
+    }
+
+    function cerrarMenusAnexo() {
+      document.querySelectorAll('.anexo-menu-list.open').forEach(m => m.classList.remove('open'));
+    }
+    document.addEventListener('click', cerrarMenusAnexo);
+
+    async function poblarMenuAnexo(menu, li, toggle, carpeta, mostrarPdfs) {
+      let analisis = anexoAnalisisCache[carpeta.id];
+      if (!analisis) {
+        menu.innerHTML = '<div class="anexo-menu-empty">Analizando estructura...</div>';
+        try {
+          analisis = await analizarProfundidadYArchivos(carpeta.id);
+          anexoAnalisisCache[carpeta.id] = analisis;
+        } catch (err) {
+          menu.innerHTML = '<div class="anexo-menu-empty">Error al analizar</div>';
+          return;
+        }
+      }
+      if (!menu.classList.contains('open')) return;
+
+      const { profundidad, tieneArchivos } = analisis;
+
+      if (!profundidad && !tieneArchivos) {
+        menu.innerHTML = '<div class="anexo-menu-empty">Sin subcarpetas ni archivos</div>';
+        return;
+      }
+      menu.innerHTML = '';
+
+      const btnTodo = document.createElement('button');
+      btnTodo.type = 'button';
+      btnTodo.className = 'anexo-menu-item';
+      btnTodo.textContent = 'Seleccionar todo';
+      btnTodo.onclick = async (ev) => {
+        ev.stopPropagation();
+        cerrarMenusAnexo();
+        await ejecutarSeleccionCapas(li, toggle, carpeta, mostrarPdfs, profundidad, true, true);
+      };
+      menu.appendChild(btnTodo);
+
+      for (let n = 1; n <= profundidad; n++) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'anexo-menu-item';
+        const etiqueta = n === 1 ? ' (carpetas)' : n === 2 ? ' (subcarpetas)' : '';
+        item.textContent = `Seleccionar hasta capa ${n}${etiqueta}`;
+        item.onclick = async (ev) => {
+          ev.stopPropagation();
+          cerrarMenusAnexo();
+          await ejecutarSeleccionCapas(li, toggle, carpeta, mostrarPdfs, n, false, false);
+        };
+        menu.appendChild(item);
+      }
+
+      if (tieneArchivos) {
+        const itemArchivos = document.createElement('button');
+        itemArchivos.type = 'button';
+        itemArchivos.className = 'anexo-menu-item';
+        itemArchivos.textContent = `Seleccionar hasta capa ${profundidad + 1} (archivos)`;
+        itemArchivos.onclick = async (ev) => {
+          ev.stopPropagation();
+          cerrarMenusAnexo();
+          await ejecutarSeleccionCapas(li, toggle, carpeta, mostrarPdfs, profundidad, false, true);
+        };
+        menu.appendChild(itemArchivos);
+      }
+    }
+
+    async function ejecutarSeleccionCapas(li, toggle, carpeta, mostrarPdfs, capaMax, todo, incluirArchivos) {
+      const efectivoIncluirArchivos = todo || incluirArchivos;
+      const subUl = await asegurarCarpetaExpandida(li, toggle, carpeta, mostrarPdfs);
+      if (subUl) {
+        await seleccionarCapasRecursivo(subUl, mostrarPdfs, 1, capaMax, todo, efectivoIncluirArchivos);
+      }
+      if (mostrarPdfs) actualizarContadorPaginas();
+    }
+
+    async function seleccionarCapasRecursivo(ul, mostrarPdfs, capaActual, capaMax, todo, incluirArchivos) {
+      if (incluirArchivos) {
+        ul.querySelectorAll(':scope > li.pdf-item > label > .pdf-chk').forEach(chk => { chk.checked = true; });
+      }
+
+      const lis = Array.from(ul.children).filter(li => li.querySelector(':scope > .folder-node > label > .folder-chk'));
+      for (const li of lis) {
+        const chk = li.querySelector(':scope > .folder-node > label > .folder-chk');
+        const toggle = li.querySelector(':scope > .folder-node > .folder-toggle');
+        const carpetaHija = { id: chk.value, name: chk.getAttribute('data-name') };
+
+        chk.checked = todo || capaActual <= capaMax;
+
+        const seguirExpandiendo = todo || incluirArchivos || capaActual < capaMax;
+        if (seguirExpandiendo) {
+          const subUl = await asegurarCarpetaExpandida(li, toggle, carpetaHija, mostrarPdfs);
+          if (subUl) {
+            await seleccionarCapasRecursivo(subUl, mostrarPdfs, capaActual + 1, capaMax, todo, incluirArchivos);
+          }
+        }
+      }
+    }
+
+    // CONTADOR DE PÁGINAS
     function actualizarContadorPaginas() {
       const checks = document.querySelectorAll('#treeTomos .pdf-chk:checked');
       let totalPaginas = 0, desconocidos = 0;
@@ -1075,9 +1263,7 @@
       }
     }
 
-    // ============================
     // RESULTADO DE LA ÚLTIMA ACCIÓN
-    // ============================
     function registrarResultado(tipo, mensaje) {
       resultLog.unshift({ tipo, mensaje, hora: new Date().toLocaleTimeString() });
       resultLog = resultLog.slice(0, 10);
@@ -1099,9 +1285,7 @@
       `).join('');
     }
 
-    // ============================
     // COLA DE SOLICITUDES
-    // ============================
     function agregarSolicitud(tipo, origen, destino) {
       const item = { id: ++colaSeq, tipo, origen, destino, estado: 'En cola', hora: '-' };
       colaSolicitudes.unshift(item);
@@ -1161,106 +1345,6 @@
       resumen.textContent = `Mostrando ${colaSolicitudes.length} solicitud${colaSolicitudes.length === 1 ? '' : 'es'}`;
     }
 
-    // ============================
-    // USUARIOS
-    // ============================
-    async function cargarUsuarios() {
-      const body = document.getElementById('usuariosBody');
-      try {
-        const usuarios = await callBackend('listarUsuarios');
-        if (!usuarios.length) {
-          body.innerHTML = '<tr><td colspan="4">Aún no hay usuarios registrados.</td></tr>';
-          return;
-        }
-        body.innerHTML = usuarios.map(u => `
-          <tr>
-            <td>${u.usuario}</td>
-            <td><input type="text" class="form-input" value="${u.cargo || ''}" id="cargo-${u.usuario}" style="max-width:160px;"></td>
-            <td><span class="pill ${u.activo ? 'pill-ok' : 'pill-cancelado'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
-            <td>
-              <button class="btn btn-secondary" onclick="guardarCargoUI('${u.usuario}')">Guardar cargo</button>
-              <button class="btn btn-blue" onclick="cambiarPasswordUI('${u.usuario}')">Cambiar clave</button>
-              <button class="btn ${u.activo ? 'btn-danger' : 'btn-green'}" onclick="toggleActivoUI('${u.usuario}', ${!u.activo})">${u.activo ? 'Desactivar' : 'Activar'}</button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        body.innerHTML = `<tr><td colspan="4">Error al cargar usuarios: ${err.message}</td></tr>`;
-      }
-    }
-
-    async function crearUsuarioUI() {
-      const usuario = document.getElementById('nuevoUsuarioNombre').value.trim();
-      const cargo = document.getElementById('nuevoUsuarioCargo').value.trim();
-      const password = document.getElementById('nuevoUsuarioPassword').value;
-      try {
-        const res = await callBackend('crearUsuario', usuario, password, cargo);
-        showSuccess('statusUsuarios', res.mensaje);
-        document.getElementById('nuevoUsuarioNombre').value = '';
-        document.getElementById('nuevoUsuarioCargo').value = '';
-        document.getElementById('nuevoUsuarioPassword').value = '';
-        cargarUsuarios();
-      } catch (err) {
-        showError('statusUsuarios', err.message);
-      }
-    }
-
-    async function guardarCargoUI(usuario) {
-      const nuevoCargo = document.getElementById(`cargo-${usuario}`).value.trim();
-      try {
-        const res = await callBackend('actualizarCargoUsuario', usuario, nuevoCargo);
-        showSuccess('statusUsuarios', res.mensaje);
-      } catch (err) {
-        showError('statusUsuarios', err.message);
-      }
-    }
-
-    async function cambiarPasswordUI(usuario) {
-      const nuevaPassword = prompt(`Nueva contraseña para "${usuario}" (mínimo 4 caracteres):`);
-      if (!nuevaPassword) return;
-      try {
-        const res = await callBackend('cambiarPasswordUsuario', usuario, nuevaPassword);
-        showSuccess('statusUsuarios', res.mensaje);
-      } catch (err) {
-        showError('statusUsuarios', err.message);
-      }
-    }
-
-    async function toggleActivoUI(usuario, nuevoEstado) {
-      try {
-        const res = await callBackend('cambiarEstadoUsuario', usuario, nuevoEstado);
-        showSuccess('statusUsuarios', res.mensaje);
-        cargarUsuarios();
-      } catch (err) {
-        showError('statusUsuarios', err.message);
-      }
-    }
-
-    // ============================
-    // AUDITORÍA
-    // ============================
-    async function cargarAuditoria() {
-      const body = document.getElementById('auditoriaBody');
-      body.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
-      try {
-        const registros = await callBackend('obtenerAuditoria');
-        if (!registros.length) {
-          body.innerHTML = '<tr><td colspan="4">Aún no hay registros de auditoría.</td></tr>';
-          return;
-        }
-        body.innerHTML = registros.map(r => `
-          <tr>
-            <td>${r.fecha}</td>
-            <td>${r.usuario}</td>
-            <td><span class="pill-tipo">${r.modulo}</span></td>
-            <td>${r.accion}</td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        body.innerHTML = `<tr><td colspan="4">Error al cargar auditoría: ${err.message}</td></tr>`;
-      }
-    }
-
     function seleccionarTodoCola() {
       document.querySelectorAll('.cola-chk').forEach(chk => chk.checked = true);
     }
@@ -1281,9 +1365,7 @@
       renderCola();
     }
 
-    // ============================
     // ACCIONES: CARÁTULAS
-    // ============================
     async function ejecutarCaratulas() {
       const seleccionados = obtenerSeleccionados('treeCaratulas');
       if (!seleccionados.length) return alert('Seleccione al menos una carpeta');
@@ -1330,9 +1412,7 @@
       }
     }
 
-    // ============================
     // ACCIONES: COMPILADOR
-    // ============================
     async function probarServidor(seccion) {
       const hoja = seccion === 'Tomos' ? 'TOMOS' : 'CARATULAS Y COMPILADOS';
       const celda = 'C8';
@@ -1376,23 +1456,19 @@
       }
     }
 
-    // ============================
     // ACCIONES: TOMOS
-    // ============================
     async function ejecutarHerramientaTomos(tipo) {
       const seleccionados = obtenerSeleccionados('treeTomos');
       const pdfsManual = obtenerPdfsSeleccionados('treeTomos');
       if (!seleccionados.length && !pdfsManual.length) return alert('Seleccione carpetas de compilados, o marque PDFs sueltos para armar un tomo manual');
 
-      const nivelSeleccionado = document.querySelector('input[name="nivelProfundidad"]:checked');
       const config = {
         numerosTomos: document.getElementById('numerosTomos').value,
         permitirSinCaratula: document.getElementById('permitirSinCaratula').checked,
         usarNumeracionManual: document.getElementById('usarNumeracionManual').checked,
         numeroInicialTomo: document.getElementById('numeroInicialTomo').value,
         totalGeneralTomos: document.getElementById('totalGeneralTomos').value,
-        pdfsManual: pdfsManual,
-        nivelProfundidad: nivelSeleccionado ? nivelSeleccionado.value : 'general'
+        pdfsManual: pdfsManual
       };
 
       const etiquetaTipo = tipo === 'calcular' ? 'PROYECCIÓN' : tipo === 'caratulas' ? 'ÍNDICE' : 'TOMO';
@@ -1425,9 +1501,7 @@
       }
     }
 
-    // ============================
     // HISTORIAL CARATULAS Y COMPILADOS
-    // ============================
     async function cargarHistorial() {
       const tbody = document.getElementById('historialBody');
       tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
@@ -1499,9 +1573,7 @@
       paginacion.style.display = 'flex';
     }
 
-    // ============================
     // HISTORIAL TOMOS
-    // ============================
     async function cargarHistorialTomos() {
       const tbody = document.getElementById('historialTomosBody');
       tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
@@ -1573,9 +1645,7 @@
       paginacion.style.display = 'flex';
     }
 
-    // ============================
-    // BORRAR HISTORIAL (común)
-    // ============================
+    // BORRAR HISTORIAL
     async function borrarHistorial(nombreHoja, tbodyId, paginacionId) {
       if (!confirm('¿Seguro que deseas borrar el historial de ' + nombreHoja + '? Esta acción no se puede deshacer.')) return;
       try {
