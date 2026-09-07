@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel Maestro Integrado</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* ==========================================
+       VARIABLES Y RESET
+       ========================================== */
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --accent-orange: #d97706;
+      --accent-orange-hover: #b45309;
+      --accent-purple: #9333ea;
+      --accent-purple-hover: #7e22ce;
+      --success: #16a34a;
+      --success-bg: #dcfce7;
+      --warning: #b45309;
+      --warning-bg: #fef3c7;
+      --danger: #dc2626;
+      --danger-bg: #fee2e2;
+      --info-bg: #f0f9ff;
+      --info-border: #bae6fd;
+      --bg-main: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-subtle: #f8fafc;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-light: #94a3b8;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
+    body { background: var(--bg-main); color: var(--text-main); font-size: 14px; line-height: 1.4; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-subtle); }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* ==========================================
+       LOGIN
+       ========================================== */
+    .login-container {
+      display: flex; justify-content: center; align-items: center; min-height: 100vh;
+      background: radial-gradient(circle at top, #fff, var(--bg-main)); padding: 20px;
+    }
+    .login-card {
+      background: var(--bg-card); width: 100%; max-width: 400px; padding: 40px 32px;
+      border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); border: 1px solid var(--border); text-align: center;
+    }
+    .login-icon {
+      width: 56px; height: 56px; background: var(--primary); color: #fff; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px;
+    }
+    .login-card h2 { font-size: 22px; margin-bottom: 4px; }
+    .login-card .subtitle { color: var(--text-light); margin-bottom: 24px; font-size: 14px; }
+    .input-group { text-align: left; margin-bottom: 16px; }
+    .input-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+    .input-wrapper { position: relative; }
+    .input-wrapper i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light); }
+    .input-wrapper input {
+      width: 100%; padding: 10px 12px 10px 36px; border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm); font-size: 14px; outline: none; transition: border-color .15s;
+    }
+    .input-wrapper input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .btn-primary {
+      background: var(--primary); color: #fff; border: none; border-radius: var(--radius-sm);
+      padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;
+      transition: background .15s; margin-top: 8px;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .login-footer { margin-top: 24px; font-size: 12px; color: var(--text-light); }
+
+    /* ==========================================
+       TOPBAR
+       ========================================== */
+    .topbar {
+      height: 60px; background: var(--bg-card); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
+      position: sticky; top: 0; z-index: 20;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 16px; }
+    .hamburger {
+      width: 34px; height: 34px; border: none; background: transparent; border-radius: var(--radius-sm);
+      cursor: pointer; color: var(--text-muted); font-size: 16px;
+    }
+    .hamburger:hover { background: var(--bg-subtle); }
+    .topbar-title { font-size: 18px; font-weight: 700; }
+    .topbar-right { display: flex; align-items: center; gap: 18px; }
+    .bell-wrapper { position: relative; cursor: pointer; color: var(--text-muted); font-size: 17px; }
+    .bell-wrapper:hover { color: var(--primary); }
+    .bell-badge {
+      position: absolute; top: -6px; right: -8px; background: var(--danger); color: #fff;
+      font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 5px; min-width: 16px; text-align: center;
+    }
+    .topbar-user { display: flex; align-items: center; gap: 10px; }
+
+    /* ==========================================
+       DASHBOARD LAYOUT
+       ========================================== */
+    .dashboard { display: flex; min-height: calc(100vh - 60px); }
+    .sidebar {
+      width: 240px; background: var(--bg-card); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; padding: 20px 0; flex-shrink: 0;
+    }
+    .sidebar .nav-section { margin-bottom: 24px; }
+    .nav-label { font-size: 11px; font-weight: 700; color: var(--text-light); padding: 0 20px 8px; letter-spacing: .5px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px; padding: 10px 20px; color: var(--text-muted);
+      text-decoration: none; font-size: 14px; cursor: pointer; border-left: 3px solid transparent;
+      transition: all .15s;
+    }
+    .nav-item i:first-child { width: 18px; }
+    .nav-item:hover { background: var(--bg-subtle); color: var(--primary); }
+    .nav-item.active { background: var(--primary-light); color: var(--primary); border-left-color: var(--primary); font-weight: 600; }
+    .nav-badge {
+      margin-left: auto; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700;
+      border-radius: 999px; padding: 1px 7px;
+    }
+    .sidebar-footer { margin-top: auto; border-top: 1px solid var(--border); padding-top: 10px; }
+    .logout { color: var(--danger); }
+    .logout:hover { background: var(--danger-bg); color: var(--danger); }
+
+    .main-content { flex: 1; padding: 24px; overflow-y: auto; min-width: 0; }
+    .header { margin-bottom: 20px; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 50%; background: var(--text-main); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0;
+    }
+    .user-details { display: flex; flex-direction: column; line-height: 1.25; }
+    .user-name { font-weight: 600; font-size: 13px; }
+    .user-role { font-size: 12px; color: var(--text-light); }
+
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow-sm);
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .card-header h2 { font-size: 17px; }
+    .card-refresh { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 14px; }
+    .card-refresh:hover { color: var(--primary); }
+
+    .stepper { display: flex; gap: 28px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+    .step { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-light); font-weight: 600; font-size: 14px; }
+    .step-num {
+      width: 24px; height: 24px; border-radius: 50%; background: var(--border); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+      transition: background .15s;
+    }
+    .step.active { color: var(--accent-orange); }
+    .step.active .step-num { background: var(--accent-orange); }
+
+    .content-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+    @media (max-width: 900px) { .content-grid { grid-template-columns: 1fr; } }
+
+    .result-panel { min-height: 320px; }
+    .result-empty { color: var(--text-light); font-size: 13px; }
+    .result-entry { border-left: 3px solid var(--border-strong); padding: 8px 12px; margin-bottom: 10px; border-radius: 4px; background: var(--bg-subtle); }
+    .result-entry.ok { border-left-color: var(--success); }
+    .result-entry.error { border-left-color: var(--danger); }
+    .result-entry.warn { border-left-color: var(--warning); }
+    .result-entry .result-time { font-size: 11px; color: var(--text-light); margin-bottom: 2px; }
+    .result-entry .result-msg { font-size: 13px; }
+
+    .btn {
+      display: inline-block; padding: 8px 16px; border: none; border-radius: var(--radius-sm);
+      cursor: pointer; font-weight: 600; font-size: 14px; transition: all .15s;
+    }
+    .btn-secondary { background: #fff; border: 1px solid var(--border-strong); color: var(--text-muted); }
+    .btn-secondary:hover { background: var(--bg-subtle); }
+    .btn-orange { background: var(--accent-orange); color: #fff; }
+    .btn-orange:hover { background: var(--accent-orange-hover); }
+    .btn-purple { background: var(--accent-purple); color: #fff; }
+    .btn-purple:hover { background: var(--accent-purple-hover); }
+    .btn-blue { background: var(--primary); color: #fff; }
+    .btn-blue:hover { background: var(--primary-hover); }
+    .btn-green { background: var(--success); color: #fff; }
+    .btn-green:hover { background: #15803d; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-block { width: 100%; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .form-group { margin-bottom: 12px; }
+    .form-label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px; }
+    .form-input, .form-select {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+      font-size: 14px; outline: none;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--primary); }
+
+    .info-banner {
+      background: var(--info-bg); border: 1px solid var(--info-border); color: var(--text-muted);
+      padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 14px;
+    }
+    .purple-box { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: var(--radius-sm); padding: 14px; }
+    .purple-box h4 { color: var(--accent-purple); margin-bottom: 4px; }
+    .purple-box p { color: var(--text-muted); font-size: 13px; }
+
+    .tree-container {
+      max-height: 220px; overflow-y: auto; border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm); padding: 8px; background: var(--bg-subtle);
+    }
+    ul { list-style: none; padding-left: 18px; }
+    li { margin: 3px 0; }
+    .folder-toggle { cursor: pointer; color: var(--primary); font-weight: 700; }
+    .folder-chk { margin-right: 6px; }
+    .pdf-item { padding-left: 4px; }
+    .pdf-chk { margin-right: 6px; }
+    .pdf-label-text { color: var(--text-muted); }
+    .pdf-label-text.pdf-sin-dato { color: var(--warning); font-style: italic; }
+
+    .status-msg { display: none; padding: 10px; border-radius: var(--radius-sm); margin-top: 12px; }
+    .msg-success { background: var(--success-bg); color: var(--success); border: 1px solid #bbf7d0; }
+    .msg-error { background: var(--danger-bg); color: var(--danger); border: 1px solid #fecaca; }
+    .msg-warning { background: var(--warning-bg); color: var(--warning); border: 1px solid #fde68a; }
+
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: var(--bg-subtle); padding: 8px 12px; text-align: left; font-weight: 600; white-space: nowrap; }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--bg-subtle); }
+    .link-drive { color: var(--primary); text-decoration: none; }
+    .link-drive:hover { text-decoration: underline; }
+
+    .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .pill-cola { background: var(--bg-subtle); color: var(--text-muted); border: 1px solid var(--border-strong); }
+    .pill-generando { background: var(--info-bg); color: var(--primary); border: 1px solid var(--info-border); }
+    .pill-ok { background: var(--success-bg); color: var(--success); }
+    .pill-cancelado { background: var(--danger-bg); color: var(--danger); }
+    .pill-tipo { background: var(--bg-subtle); border: 1px solid var(--border-strong); color: var(--text-muted); font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+
+    .queue-toolbar { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+    .queue-summary { color: var(--text-muted); font-size: 13px; margin-top: 10px; }
+    .queue-empty, .placeholder-empty { color: var(--text-light); font-size: 13px; padding: 30px 0; text-align: center; }
+
+    .pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+    .page-btns { display: flex; gap: 6px; }
+    .page-btn {
+      border: 1px solid var(--border-strong); background: #fff; color: var(--text-muted); padding: 5px 11px;
+      border-radius: var(--radius-sm); cursor: pointer; font-size: 13px;
+    }
+    .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .page-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .icon-btn { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 14px; }
+    .icon-btn:hover { color: var(--primary); }
+
+    .mt-10 { margin-top: 10px; }
+    .mt-20 { margin-top: 20px; }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
+
+    /* Selector de nivel de profundidad con cuadros */
+    .nivel-selector { display: flex; flex-wrap: wrap; gap: 8px; }
+    .nivel-option { cursor: pointer; margin: 0; }
+    .nivel-option input[type="radio"] { display: none; }
+    .nivel-box {
+      display: inline-block; padding: 8px 16px; border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm); background: #fff; color: var(--text-muted);
+      font-weight: 600; font-size: 13px; transition: all .15s; text-align: center; min-width: 70px;
+    }
+    .nivel-option input[type="radio"]:checked + .nivel-box {
+      background: var(--primary-light); border-color: var(--primary); color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(37,99,235,0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== LOGIN ==================== -->
+  <div id="loginView" class="login-container">
+    <div class="login-card">
+      <div class="login-icon"><i class="fa-solid fa-lock"></i></div>
+      <h2>Acceso al Sistema</h2>
+      <p class="subtitle">Panel Maestro Integrado</p>
+      <div class="input-group">
+        <label>Usuario</label>
+        <div class="input-wrapper">
+          <i class="fa-regular fa-user"></i>
+          <input type="text" id="username" placeholder="Ingrese su usuario" autocomplete="username">
+        </div>
+      </div>
+      <div class="input-group">
+        <label>Contraseña</label>
+        <div class="input-wrapper">
+          <i class="fa-solid fa-lock"></i>
+          <input type="password" id="password" placeholder="Ingrese su contraseña" autocomplete="current-password">
+        </div>
+      </div>
+      <button class="btn-primary" id="loginBtn" onclick="handleLogin()">Iniciar sesión</button>
+      <div id="loginError" class="status-msg msg-error" style="display:none;"></div>
+      <div class="login-footer">© 2026 Panel Maestro Integrado</div>
+    </div>
+  </div>
+
+  <!-- ==================== DASHBOARD ==================== -->
+  <div id="dashboardView" style="display:none;">
+
+    <!-- Barra superior -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('sidebar-hidden')"><i class="fa-solid fa-bars"></i></button>
+        <span class="topbar-title">Panel Maestro Integrado</span>
+      </div>
+      <div class="topbar-right">
+        <div class="bell-wrapper" onclick="switchTab('cola', document.querySelector('.nav-item[data-tab=cola]'))">
+          <i class="fa-regular fa-bell"></i>
+          <span class="bell-badge" id="bellBadge" style="display:none;">0</span>
+        </div>
+        <div class="topbar-user">
+          <div class="avatar" id="userAvatar">?</div>
+          <div class="user-details">
+            <span class="user-name" id="userName">—</span>
+            <span class="user-role" id="userRole">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="nav-section">
+          <div class="nav-label">INICIO</div>
+          <a class="nav-item active" data-tab="inicio" onclick="switchTab('inicio', this)"><i class="fa-solid fa-house"></i> Inicio</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-label">MÓDULOS PRINCIPALES</div>
+          <a class="nav-item" data-tab="caratulas" onclick="switchTab('caratulas', this)"><i class="fa-regular fa-file-lines"></i> Carátulas</a>
+          <a class="nav-item" data-tab="compilador" onclick="switchTab('compilador', this)"><i class="fa-solid fa-layer-group"></i> Compilar</a>
+          <a class="nav-item" data-tab="tomos" onclick="switchTab('tomos', this)"><i class="fa-solid fa-book"></i> Tomos</a>
+          <a class="nav-item" data-tab="cola" onclick="switchTab('cola', this)">
+            <i class="fa-solid fa-list-check"></i> Cola de Solicitudes
+            <span class="nav-badge" id="navBadgeCola" style="display:none;">0</span>
+          </a>
+          <a class="nav-item" data-tab="historial" onclick="switchTab('historial', this)"><i class="fa-solid fa-clock-rotate-left"></i> Historial de Ejecuciones</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-label">ADMINISTRACIÓN</div>
+          <a class="nav-item" data-tab="reportes" onclick="switchTab('reportes', this)"><i class="fa-solid fa-chart-line"></i> Reportes</a>
+          <a class="nav-item" data-tab="configuracion" onclick="switchTab('configuracion', this)"><i class="fa-solid fa-gear"></i> Configuración</a>
+          <a class="nav-item" data-tab="usuarios" onclick="switchTab('usuarios', this)"><i class="fa-solid fa-users"></i> Usuarios</a>
+          <a class="nav-item" data-tab="auditoria" onclick="switchTab('auditoria', this)"><i class="fa-solid fa-shield-halved"></i> Auditoría</a>
+        </div>
+        <div class="sidebar-footer">
+          <a class="nav-item logout" onclick="logout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> Cerrar sesión</a>
+        </div>
+      </aside>
+
+      <!-- Contenido principal -->
+      <main class="main-content">
+
+        <!-- INICIO -->
+        <div id="view-inicio" class="view-content">
+          <div class="header"><h1>Bienvenido</h1></div>
+          <div class="card">
+            <p style="color:var(--text-muted)">Usa el menú lateral para generar carátulas, compilar expedientes o armar tomos. La cola de solicitudes y el resumen de ejecuciones se actualizan en tiempo real a medida que ejecutas acciones.</p>
+          </div>
+        </div>
+
+        <!-- CARÁTULAS / COMPILAR / TOMOS -->
+        <div id="view-modulos" class="view-content" style="display:none;">
+          <div class="header"><h1>Panel Maestro Integrado</h1></div>
+
+          <div class="content-grid">
+            <!-- Columna izquierda: formulario -->
+            <div class="card">
+              <div class="stepper">
+                <div class="step" data-step="caratulas" onclick="switchTab('caratulas', document.querySelector('.nav-item[data-tab=caratulas]'))">
+                  <span class="step-num">1</span> Carátulas
+                </div>
+                <div class="step" data-step="compilador" onclick="switchTab('compilador', document.querySelector('.nav-item[data-tab=compilador]'))">
+                  <span class="step-num">2</span> Compilar
+                </div>
+                <div class="step" data-step="tomos" onclick="switchTab('tomos', document.querySelector('.nav-item[data-tab=tomos]'))">
+                  <span class="step-num">3</span> Tomos
+                </div>
+              </div>
+
+              <!-- Carátulas -->
+              <div id="tab-caratulas" class="tab-content">
+                <div class="info-banner">Hoja: <b>CARATULAS Y COMPILADOS</b> — C2 origen, C3 plantillas, C4 destino.</div>
+                <button class="btn btn-secondary btn-block" onclick="cargarArbol('treeCaratulas', 'C2', 'CARATULAS Y COMPILADOS')">
+                  <i class="fa-solid fa-folder-open"></i> Cargar origen (C2)
+                </button>
+                <div class="tree-container mt-10"><ul id="treeCaratulas"><li>Esperando carga de carpetas...</li></ul></div>
+
+                <div class="form-group mt-10">
+                  <label class="form-label">Plantilla</label>
+                  <select id="selectPlantilla" class="form-select"><option value="">Cargando modelos...</option></select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Tipo de carátula</label>
+                  <label style="display:block;"><input type="radio" name="tipoCaratula" value="original" checked> Original: reemplaza XXXXXX/XXXXX/XXXX</label>
+                  <label style="display:block;"><input type="radio" name="tipoCaratula" value="nueva"> Nueva: coloca prefijo en YYYY</label>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Ubicación de salida</label>
+                  <label style="display:block;"><input type="radio" name="saveType" value="automatico" checked onchange="toggleManual()"> Replicar estructura en C4</label>
+                  <label style="display:block;"><input type="radio" name="saveType" value="manual" onchange="toggleManual()"> Guardar directamente en C4 o subcarpeta</label>
+                  <input id="nombreCarpetaManual" type="text" class="form-input mt-10" placeholder="Subcarpeta opcional dentro de C4" style="display:none;">
+                </div>
+
+                <div class="form-group">
+                  <label style="display:block;"><input type="checkbox" id="soloCarpetasCheck"> <b>Solo crear carpetas, sin generar PDF</b></label>
+                </div>
+
+                <button class="btn btn-orange btn-block" onclick="ejecutarCaratulas()"><i class="fa-solid fa-play"></i> Generar carátulas/carpetas</button>
+
+                <hr class="mt-20">
+                <div class="purple-box mt-20">
+                  <h4>Carátulas base de Anexos 11 y 13</h4>
+                  <p>Crea únicamente las carátulas fijas de bloque y especiales de los Anexos 11 y 13.</p>
+                  <button class="btn btn-purple btn-block mt-10" onclick="ejecutarRestauracionBase()"><i class="fa-solid fa-wand-magic-sparkles"></i> Restaurar carátulas base</button>
+                </div>
+
+                <div id="statusCaratulas" class="status-msg"></div>
+              </div>
+
+              <!-- Compilador -->
+              <div id="tab-compilador" class="tab-content" style="display:none;">
+                <div class="info-banner">Hoja: <b>CARATULAS Y COMPILADOS</b> — C2 origen, C4 carátulas, C6 salida, C8 servidor (Railway).</div>
+                <div class="row">
+                  <button class="btn btn-secondary" onclick="cargarArbol('treeCompilador', 'C2', 'CARATULAS Y COMPILADOS')">Cargar directorios</button>
+                  <button class="btn btn-blue" onclick="probarServidor('Compilador')">Probar servidor</button>
+                </div>
+                <div class="tree-container mt-10"><ul id="treeCompilador"><li>Esperando carga de carpetas...</li></ul></div>
+
+                <div class="form-group mt-10">
+                  <label class="form-label">Si ya existe un compilado</label>
+                  <select id="politicaDuplicados" class="form-select">
+                    <option value="nuevo">Crear uno nuevo con fecha y hora</option>
+                    <option value="reemplazar">Enviar los anteriores a la papelera</option>
+                    <option value="omitir">Omitir la carpeta</option>
+                  </select>
+                </div>
+
+                <div class="row mt-10">
+                  <button class="btn btn-blue" onclick="ejecutarCompilacion()">Compilar archivos</button>
+                  <button class="btn btn-secondary" onclick="consultarPendientesCompilador()">Consultar pendientes</button>
+                </div>
+                <div id="statusCompilador" class="status-msg"></div>
+              </div>
+
+              <!-- Tomos -->
+              <div id="tab-tomos" class="tab-content" style="display:none;">
+                <div class="info-banner">Hoja: <b>TOMOS</b> — C3 plantilla, C4 tomos finales, C5 compilados, C6 índices, C8 servidor (Railway).</div>
+                <div class="row">
+                  <button class="btn btn-secondary" onclick="cargarArbol('treeTomos', 'C5', 'TOMOS')">Cargar compilados (C5)</button>
+                  <button class="btn btn-blue" onclick="probarServidor('Tomos')">Probar servidor</button>
+                </div>
+                <div class="tree-container mt-10"><ul id="treeTomos"><li>Esperando carga de carpetas...</li></ul></div>
+
+                <div class="form-group mt-10">
+                  <label class="form-label">Selección actual</label>
+                  <div id="contadorPaginas" class="info-banner" style="font-weight:bold;">0 PDF · 0 páginas</div>
+                  <button class="btn btn-secondary mt-10" onclick="consultarPaginasPendientes()">Consultar páginas exactas de los "¿?"</button>
+                </div>
+
+                <div class="form-group mt-10">
+                  <label class="form-label">Tomos específicos (vacío = todos)</label>
+                  <input id="numerosTomos" type="text" class="form-input" placeholder="Ejemplo: 1, 3, 5">
+                </div>
+
+                <!-- Selector de nivel con cuadros -->
+                <div class="form-group">
+                  <label class="form-label">Nivel de profundidad para proyección</label>
+                  <div class="nivel-selector">
+                    <label class="nivel-option">
+                      <input type="radio" name="nivelProfundidad" value="general" checked>
+                      <span class="nivel-box">General</span>
+                    </label>
+                    <label class="nivel-option">
+                      <input type="radio" name="nivelProfundidad" value="1">
+                      <span class="nivel-box">Nivel 1</span>
+                    </label>
+                    <label class="nivel-option">
+                      <input type="radio" name="nivelProfundidad" value="2">
+                      <span class="nivel-box">Nivel 2</span>
+                    </label>
+                    <label class="nivel-option">
+                      <input type="radio" name="nivelProfundidad" value="3">
+                      <span class="nivel-box">Nivel 3</span>
+                    </label>
+                    <label class="nivel-option">
+                      <input type="radio" name="nivelProfundidad" value="4">
+                      <span class="nivel-box">Nivel 4</span>
+                    </label>
+                  </div>
+                  <div class="small" style="margin-top:4px; color: var(--text-light); font-size: 12px;">
+                    Elige hasta qué nivel de subcarpetas se incluirán al proyectar.
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label style="display:block;"><input type="checkbox" id="usarNumeracionManual" onchange="toggleManualTomos()"> <b>Usar numeración manual</b></label>
+                  <div id="bloqueNumeracionManual" style="display:none;">
+                    <input id="numeroInicialTomo" type="number" class="form-input mt-10" placeholder="Número inicial" min="1">
+                    <input id="totalGeneralTomos" type="number" class="form-input mt-10" placeholder="Total general" min="1">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label style="display:block;"><input type="checkbox" id="permitirSinCaratula"> Permitir fusionar sin carátula</label>
+                </div>
+
+                <div class="row mt-10">
+                  <button class="btn btn-green" onclick="ejecutarHerramientaTomos('calcular')">1. Proyectar</button>
+                  <button class="btn btn-orange" onclick="ejecutarHerramientaTomos('caratulas')">2. Índices</button>
+                  <button class="btn btn-purple" onclick="ejecutarHerramientaTomos('fusionar')">3. Fusionar</button>
+                </div>
+                <button class="btn btn-secondary btn-block mt-10" onclick="consultarPendientesTomos()">Consultar tomos pendientes</button>
+                <div id="statusTomos" class="status-msg"></div>
+              </div>
+            </div>
+
+            <!-- Columna derecha: resultado de la última acción -->
+            <div class="card result-panel">
+              <div class="card-header">
+                <h2>Resultado de la última acción</h2>
+                <button class="card-refresh" onclick="renderResultPanel()"><i class="fa-solid fa-rotate"></i></button>
+              </div>
+              <div id="resultPanelBody">
+                <p class="result-empty">Se actualiza cada vez que ejecutas una acción del panel.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- COLA DE SOLICITUDES -->
+        <div id="view-cola" class="view-content" style="display:none;">
+          <div class="header"><h1>Cola de Solicitudes</h1></div>
+          <div class="card">
+            <div class="info-banner">Aquí se muestran las solicitudes en proceso de este módulo. Puedes seleccionarlas o cancelarlas.</div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr><th></th><th>#</th><th>Tipo</th><th>Origen (Carpeta)</th><th>Destino</th><th>Estado</th><th>Hora</th></tr>
+                </thead>
+                <tbody id="colaBody">
+                  <tr><td colspan="7" class="queue-empty">Aún no hay solicitudes registradas en esta sesión.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="queue-summary" id="colaResumen">Mostrando 0 solicitudes</div>
+            <div class="queue-toolbar">
+              <button class="btn btn-blue" onclick="seleccionarTodoCola()">Seleccionar todo</button>
+              <button class="btn btn-danger" onclick="cancelarTodoCola()">Cancelar todo</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- HISTORIAL / RESUMEN DE EJECUCIONES -->
+        <div id="view-historial" class="view-content" style="display:none;">
+          <div class="header"><h1>Historial de Ejecuciones</h1></div>
+          <div id="resumenEjecucionesCard"></div>
+        </div>
+
+        <!-- MÓDULOS EN DESARROLLO -->
+        <div id="view-reportes" class="view-content" style="display:none;">
+          <div class="header"><h1>Reportes</h1></div>
+          <div class="card"><p class="placeholder-empty">Módulo de reportes en desarrollo.</p></div>
+        </div>
+        <div id="view-configuracion" class="view-content" style="display:none;">
+          <div class="header"><h1>Configuración</h1></div>
+          <div class="card"><p class="placeholder-empty">Módulo de configuración en desarrollo.</p></div>
+        </div>
+        <div id="view-usuarios" class="view-content" style="display:none;">
+          <div class="header"><h1>Usuarios</h1></div>
+          <div class="card"><p class="placeholder-empty">Gestión de usuarios en desarrollo.</p></div>
+        </div>
+        <div id="view-auditoria" class="view-content" style="display:none;">
+          <div class="header"><h1>Auditoría</h1></div>
+          <div class="card"><p class="placeholder-empty">Registro de auditoría en desarrollo.</p></div>
+        </div>
+
+        <!-- RESUMEN DE EJECUCIONES: CARATULAS Y COMPILADOS -->
+        <div class="card" id="resumenGlobalCard">
+          <div class="card-header">
+            <h2><i class="fa-regular fa-clipboard"></i> Resumen de Ejecuciones (CARATULAS Y COMPILADOS)</h2>
+            <div>
+              <button class="card-refresh" onclick="cargarHistorial()" title="Refrescar"><i class="fa-solid fa-rotate"></i></button>
+              <button class="card-refresh" onclick="borrarHistorial('CARATULAS Y COMPILADOS', 'historialBody', 'historialPaginacion')" title="Borrar historial" style="margin-left:8px;"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr><th>Fecha y hora</th><th>Módulo</th><th>Tarea ejecutada</th><th>Estado</th><th>Link Drive</th><th>Detalles</th></tr>
+              </thead>
+              <tbody id="historialBody"><tr><td colspan="6">Cargando...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="historialPaginacion" style="display:none;">
+            <span id="historialRango"></span>
+            <div class="page-btns" id="historialPageBtns"></div>
+          </div>
+        </div>
+
+        <!-- NUEVO: Resumen de Ejecuciones (TOMOS) -->
+        <div class="card" id="resumenTomosCard">
+          <div class="card-header">
+            <h2><i class="fa-regular fa-clipboard"></i> Resumen de Ejecuciones (TOMOS)</h2>
+            <div>
+              <button class="card-refresh" onclick="cargarHistorialTomos()" title="Refrescar"><i class="fa-solid fa-rotate"></i></button>
+              <button class="card-refresh" onclick="borrarHistorial('TOMOS', 'historialTomosBody', 'historialTomosPaginacion')" title="Borrar historial de TOMOS" style="margin-left:8px;"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr><th>Fecha y hora</th><th>Módulo</th><th>Tarea ejecutada</th><th>Estado</th><th>Link Drive</th><th>Detalles</th></tr>
+              </thead>
+              <tbody id="historialTomosBody"><tr><td colspan="6">Cargando...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="historialTomosPaginacion" style="display:none;">
+            <span id="historialTomosRango"></span>
+            <div class="page-btns" id="historialTomosPageBtns"></div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    let usuarioActual = null;
+    let rolActual = null;
+
+    let colaSolicitudes = [];
+    let colaSeq = 0;
+
+    let resultLog = [];
+
+    let historialData = [];
+    let historialPagina = 1;
+    const HISTORIAL_POR_PAGINA = 5;
+
+    let historialTomosData = [];
+    let historialTomosPagina = 1;
+    const HISTORIAL_TOMOS_POR_PAGINA = 5;
+
+    // ============================
+    // LOGIN
+    // ============================
+    async function handleLogin() {
+      const usuario = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      if (!usuario || !password) return showError('loginError', 'Ingrese usuario y contraseña');
+
+      setBusy('loginBtn', true);
+      try {
+        const res = await callBackend('validarLogin', usuario, password);
+        usuarioActual = res.usuario;
+        rolActual = res.rol;
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('dashboardView').style.display = 'block';
+        document.getElementById('userName').textContent = res.usuario;
+        document.getElementById('userRole').textContent = res.rol;
+        document.getElementById('userAvatar').textContent = res.usuario.charAt(0).toUpperCase();
+        cargarPlantillas();
+        cargarHistorial();
+        cargarHistorialTomos();
+        switchTab('inicio', document.querySelector('.nav-item[data-tab="inicio"]'));
+      } catch (err) {
+        showError('loginError', err.message);
+      } finally {
+        setBusy('loginBtn', false);
+      }
+    }
+
+    function logout() {
+      usuarioActual = null;
+      rolActual = null;
+      colaSolicitudes = [];
+      resultLog = [];
+      document.getElementById('dashboardView').style.display = 'none';
+      document.getElementById('loginView').style.display = 'flex';
+      document.getElementById('username').value = '';
+      document.getElementById('password').value = '';
+    }
+
+    // ============================
+    // UTILIDADES
+    // ============================
+    function callBackend(funcName, ...args) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(err => reject(new Error(err.message)))
+          [funcName](...args);
+      });
+    }
+
+    function showError(id, msg) {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = msg; el.style.display = 'block'; el.className = 'status-msg msg-error'; }
+      registrarResultado('error', msg);
+    }
+
+    function showSuccess(id, msg) {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = msg; el.style.display = 'block'; el.className = 'status-msg msg-success'; }
+      registrarResultado('ok', msg);
+    }
+
+    function showWarning(id, msg) {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = msg; el.style.display = 'block'; el.className = 'status-msg msg-warning'; }
+      registrarResultado('warn', msg);
+    }
+
+    function setBusy(btnId, busy) {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.disabled = busy;
+    }
+
+    // ============================
+    // NAVEGACIÓN
+    // ============================
+    const VISTAS_MODULO = ['caratulas', 'compilador', 'tomos'];
+    const TODAS_LAS_VISTAS = ['inicio', 'modulos', 'cola', 'historial', 'reportes', 'configuracion', 'usuarios', 'auditoria'];
+
+    function switchTab(tabName, element) {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      const navKey = VISTAS_MODULO.includes(tabName) ? tabName : tabName;
+      const navEl = element && element.classList && element.classList.contains('nav-item')
+        ? element
+        : document.querySelector(`.nav-item[data-tab="${navKey}"]`);
+      if (navEl) navEl.classList.add('active');
+
+      const vistaDestino = VISTAS_MODULO.includes(tabName) ? 'modulos' : tabName;
+      TODAS_LAS_VISTAS.forEach(v => {
+        const el = document.getElementById('view-' + v);
+        if (el) el.style.display = (v === vistaDestino) ? 'block' : 'none';
+      });
+
+      const resumenGlobal = document.getElementById('resumenGlobalCard');
+      resumenGlobal.style.display = (vistaDestino === 'cola' || vistaDestino === 'historial') ? 'none' : 'block';
+
+      const resumenTomos = document.getElementById('resumenTomosCard');
+      resumenTomos.style.display = (vistaDestino === 'cola' || vistaDestino === 'historial') ? 'none' : 'block';
+
+      if (VISTAS_MODULO.includes(tabName)) {
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+        document.getElementById('tab-' + tabName).style.display = 'block';
+        document.querySelector(`.step[data-step="${tabName}"]`)?.classList.add('active');
+      }
+
+      if (vistaDestino === 'historial') {
+        document.getElementById('resumenEjecucionesCard').appendChild(document.getElementById('resumenGlobalCard'));
+        document.getElementById('resumenGlobalCard').style.display = 'block';
+        document.getElementById('resumenEjecucionesCard').appendChild(document.getElementById('resumenTomosCard'));
+        document.getElementById('resumenTomosCard').style.display = 'block';
+        cargarHistorial();
+        cargarHistorialTomos();
+      } else {
+        const main = document.querySelector('.main-content');
+        if (main && document.getElementById('resumenGlobalCard').parentElement !== main) {
+          main.appendChild(document.getElementById('resumenGlobalCard'));
+        }
+        if (main && document.getElementById('resumenTomosCard').parentElement !== main) {
+          main.appendChild(document.getElementById('resumenTomosCard'));
+        }
+      }
+
+      if (vistaDestino === 'cola') renderCola();
+    }
+
+    // ============================
+    // CARGA DE DATOS
+    // ============================
+    async function cargarPlantillas() {
+      try {
+        const modelos = await callBackend('obtenerModelosDeCaratula', 'CARATULAS Y COMPILADOS');
+        const select = document.getElementById('selectPlantilla');
+        select.innerHTML = '';
+        modelos.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.name;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        const select = document.getElementById('selectPlantilla');
+        select.innerHTML = '<option value="">Error al cargar</option>';
+        console.error(err);
+      }
+    }
+
+    async function cargarArbol(treeId, celda, hoja) {
+      const ul = document.getElementById(treeId);
+      ul.innerHTML = '<li>Cargando carpetas...</li>';
+      const mostrarPdfs = (treeId === 'treeTomos');
+      try {
+        const rootId = await callBackend('obtenerIdDesdeHoja', celda, hoja);
+        await pedirSubcarpetas(rootId, ul, true, mostrarPdfs, '');
+      } catch (err) {
+        ul.innerHTML = `<li style="color:red">Error: ${err.message}</li>`;
+      }
+    }
+
+    async function pedirSubcarpetas(folderId, ul, esAnexo, mostrarPdfs, nombreCarpetaActual) {
+      ul.innerHTML = '<li>Cargando...</li>';
+      try {
+        const [carpetas, pdfs] = await Promise.all([
+          callBackend('obtenerSubcarpetas', folderId),
+          mostrarPdfs ? callBackend('obtenerArchivosPdfDeCarpeta', folderId) : Promise.resolve([])
+        ]);
+        ul.innerHTML = '';
+        if (!carpetas.length && !pdfs.length) {
+          ul.innerHTML = '<li>Carpeta vacía</li>';
+          return;
+        }
+        carpetas.forEach(c => crearNodoCarpeta(ul, c, esAnexo, mostrarPdfs));
+        pdfs.forEach(p => crearNodoPdf(ul, p, nombreCarpetaActual || '', folderId));
+      } catch (err) {
+        ul.innerHTML = `<li style="color:red">Error: ${err.message}</li>`;
+      }
+    }
+
+    function crearNodoCarpeta(ul, carpeta, esAnexo, mostrarPdfs) {
+      const li = document.createElement('li');
+      const toggle = document.createElement('span');
+      toggle.className = 'folder-toggle';
+      toggle.textContent = '[+]';
+      toggle.onclick = async () => {
+        const subUl = li.querySelector('ul');
+        if (subUl) {
+          subUl.remove();
+          toggle.textContent = '[+]';
+          if (mostrarPdfs) actualizarContadorPaginas();
+          return;
+        }
+        toggle.textContent = '[-]';
+        const newUl = document.createElement('ul');
+        li.appendChild(newUl);
+        await pedirSubcarpetas(carpeta.id, newUl, false, mostrarPdfs, carpeta.name);
+      };
+      const label = document.createElement('label');
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.className = 'folder-chk';
+      chk.value = carpeta.id;
+      chk.setAttribute('data-name', carpeta.name);
+      label.appendChild(chk);
+      label.appendChild(document.createTextNode(' 📁 ' + carpeta.name));
+      li.appendChild(toggle);
+      li.appendChild(label);
+      ul.appendChild(li);
+    }
+
+    function crearNodoPdf(ul, pdf, carpetaOrigenNombre, carpetaOrigenId) {
+      const li = document.createElement('li');
+      li.className = 'pdf-item';
+      const label = document.createElement('label');
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.className = 'pdf-chk';
+      chk.value = pdf.id;
+      chk.setAttribute('data-name', pdf.name);
+      chk.setAttribute('data-paginas', pdf.paginas || 0);
+      chk.setAttribute('data-carpeta', carpetaOrigenNombre || '');
+      chk.setAttribute('data-carpeta-id', carpetaOrigenId || '');
+      chk.onchange = actualizarContadorPaginas;
+
+      const texto = document.createElement('span');
+      texto.className = 'pdf-label-text' + (pdf.paginas ? '' : ' pdf-sin-dato');
+      texto.textContent = ' 📄 ' + pdf.name + (pdf.paginas ? ` (${pdf.paginas} pág.)` : ' (¿? pág.)');
+
+      label.appendChild(chk);
+      label.appendChild(texto);
+      li.appendChild(label);
+      ul.appendChild(li);
+    }
+
+    function obtenerSeleccionados(treeId) {
+      const result = [];
+      document.querySelectorAll(`#${treeId} .folder-chk:checked`).forEach(chk => {
+        result.push({ id: chk.value, name: chk.getAttribute('data-name') });
+      });
+      return result;
+    }
+
+    function obtenerPdfsSeleccionados(treeId) {
+      const result = [];
+      document.querySelectorAll(`#${treeId} .pdf-chk:checked`).forEach(chk => {
+        result.push({
+          id: chk.value,
+          name: chk.getAttribute('data-name'),
+          paginas: Number(chk.getAttribute('data-paginas')) || 0,
+          carpetaOrigen: chk.getAttribute('data-carpeta') || '',
+          carpetaOrigenId: chk.getAttribute('data-carpeta-id') || ''
+        });
+      });
+      return result;
+    }
+
+    function toggleManual() {
+      const manual = document.querySelector('input[name="saveType"]:checked').value === 'manual';
+      document.getElementById('nombreCarpetaManual').style.display = manual ? 'block' : 'none';
+    }
+
+    function toggleManualTomos() {
+      const checked = document.getElementById('usarNumeracionManual').checked;
+      document.getElementById('bloqueNumeracionManual').style.display = checked ? 'block' : 'none';
+    }
+
+    // ============================
+    // CONTADOR DE PÁGINAS (solo Tomos)
+    // ============================
+    function actualizarContadorPaginas() {
+      const checks = document.querySelectorAll('#treeTomos .pdf-chk:checked');
+      let totalPaginas = 0, desconocidos = 0;
+      checks.forEach(chk => {
+        const p = Number(chk.getAttribute('data-paginas')) || 0;
+        if (p > 0) totalPaginas += p; else desconocidos++;
+      });
+      let texto = `${checks.length} PDF · ${totalPaginas} páginas`;
+      if (desconocidos) texto += ` (+${desconocidos} sin dato — usa "Consultar páginas exactas")`;
+      document.getElementById('contadorPaginas').textContent = texto;
+    }
+
+    async function consultarPaginasPendientes() {
+      const pendientes = Array.from(document.querySelectorAll('#treeTomos .pdf-chk:checked'))
+        .filter(chk => !Number(chk.getAttribute('data-paginas')));
+      if (!pendientes.length) {
+        showWarning('statusTomos', 'No hay PDFs seleccionados con páginas sin dato.');
+        return;
+      }
+      const ids = pendientes.map(chk => chk.value);
+      showWarning('statusTomos', `Consultando páginas exactas de ${ids.length} PDF...`);
+      try {
+        const resultados = await callBackend('obtenerPaginasDePdf', ids);
+        const mapaPaginas = {};
+        resultados.forEach(r => { mapaPaginas[r.id] = r.paginas; });
+        pendientes.forEach(chk => {
+          const paginas = mapaPaginas[chk.value];
+          if (paginas) {
+            chk.setAttribute('data-paginas', paginas);
+            const texto = chk.parentElement.querySelector('.pdf-label-text');
+            if (texto) {
+              texto.classList.remove('pdf-sin-dato');
+              texto.textContent = ' 📄 ' + chk.getAttribute('data-name') + ` (${paginas} pág.)`;
+            }
+          }
+        });
+        actualizarContadorPaginas();
+        showSuccess('statusTomos', 'Páginas actualizadas.');
+      } catch (err) {
+        showError('statusTomos', err.message);
+      }
+    }
+
+    // ============================
+    // RESULTADO DE LA ÚLTIMA ACCIÓN
+    // ============================
+    function registrarResultado(tipo, mensaje) {
+      resultLog.unshift({ tipo, mensaje, hora: new Date().toLocaleTimeString() });
+      resultLog = resultLog.slice(0, 10);
+      renderResultPanel();
+    }
+
+    function renderResultPanel() {
+      const body = document.getElementById('resultPanelBody');
+      if (!body) return;
+      if (!resultLog.length) {
+        body.innerHTML = '<p class="result-empty">Se actualiza cada vez que ejecutas una acción del panel.</p>';
+        return;
+      }
+      body.innerHTML = resultLog.map(r => `
+        <div class="result-entry ${r.tipo === 'ok' ? 'ok' : r.tipo === 'error' ? 'error' : 'warn'}">
+          <div class="result-time">${r.hora}</div>
+          <div class="result-msg">${r.mensaje}</div>
+        </div>
+      `).join('');
+    }
+
+    // ============================
+    // COLA DE SOLICITUDES
+    // ============================
+    function agregarSolicitud(tipo, origen, destino) {
+      const item = { id: ++colaSeq, tipo, origen, destino, estado: 'En cola', hora: '-' };
+      colaSolicitudes.unshift(item);
+      actualizarBadgesCola();
+      renderCola();
+      return item.id;
+    }
+
+    function actualizarEstadoSolicitud(id, estado) {
+      const item = colaSolicitudes.find(s => s.id === id);
+      if (item) {
+        item.estado = estado;
+        item.hora = new Date().toLocaleTimeString();
+      }
+      actualizarBadgesCola();
+      renderCola();
+    }
+
+    function actualizarBadgesCola() {
+      const activos = colaSolicitudes.filter(s => s.estado === 'En cola' || s.estado === 'Generando...').length;
+      const bell = document.getElementById('bellBadge');
+      const navBadge = document.getElementById('navBadgeCola');
+      [bell, navBadge].forEach(el => {
+        if (!el) return;
+        el.textContent = activos;
+        el.style.display = activos > 0 ? 'inline-block' : 'none';
+      });
+    }
+
+    function pillClase(estado) {
+      if (estado === 'Generando...') return 'pill-generando';
+      if (estado === 'Generado' || estado === 'Completado') return 'pill-ok';
+      if (estado === 'Cancelado' || estado === 'Cancelada') return 'pill-cancelado';
+      return 'pill-cola';
+    }
+
+    function renderCola() {
+      const body = document.getElementById('colaBody');
+      const resumen = document.getElementById('colaResumen');
+      if (!body) return;
+      if (!colaSolicitudes.length) {
+        body.innerHTML = '<tr><td colspan="7" class="queue-empty">Aún no hay solicitudes registradas en esta sesión.</td></tr>';
+        resumen.textContent = 'Mostrando 0 solicitudes';
+        return;
+      }
+      body.innerHTML = colaSolicitudes.map((s, idx) => `
+        <tr>
+          <td><input type="checkbox" class="cola-chk" data-id="${s.id}"></td>
+          <td>${idx + 1}</td>
+          <td><span class="pill-tipo">${s.tipo}</span></td>
+          <td>${s.origen}</td>
+          <td>${s.destino}</td>
+          <td><span class="pill ${pillClase(s.estado)}">${s.estado}</span></td>
+          <td>${s.hora}</td>
+        </tr>
+      `).join('');
+      resumen.textContent = `Mostrando ${colaSolicitudes.length} solicitud${colaSolicitudes.length === 1 ? '' : 'es'}`;
+    }
+
+    function seleccionarTodoCola() {
+      document.querySelectorAll('.cola-chk').forEach(chk => chk.checked = true);
+    }
+
+    function cancelarTodoCola() {
+      const seleccionados = Array.from(document.querySelectorAll('.cola-chk:checked')).map(chk => Number(chk.getAttribute('data-id')));
+      const idsAActuar = seleccionados.length ? seleccionados : colaSolicitudes.map(s => s.id);
+      idsAActuar.forEach(id => {
+        const item = colaSolicitudes.find(s => s.id === id);
+        if (!item) return;
+        if (item.estado === 'En cola' || item.estado === 'Generando...') {
+          actualizarEstadoSolicitud(id, 'Cancelada');
+        } else {
+          colaSolicitudes = colaSolicitudes.filter(s => s.id !== id);
+        }
+      });
+      actualizarBadgesCola();
+      renderCola();
+    }
+
+    // ============================
+    // ACCIONES: CARÁTULAS
+    // ============================
+    async function ejecutarCaratulas() {
+      const seleccionados = obtenerSeleccionados('treeCaratulas');
+      if (!seleccionados.length) return alert('Seleccione al menos una carpeta');
+      const soloCarpetas = document.getElementById('soloCarpetasCheck').checked;
+      const idPlantilla = document.getElementById('selectPlantilla').value;
+      if (!soloCarpetas && !idPlantilla) return alert('Seleccione plantilla');
+      const ubicacion = {
+        tipo: document.querySelector('input[name="saveType"]:checked').value,
+        soloCarpetas,
+        nombreNuevaCarpeta: document.getElementById('nombreCarpetaManual').value
+      };
+      const caratula = {
+        idPlantilla,
+        tipo: document.querySelector('input[name="tipoCaratula"]:checked').value
+      };
+
+      const idsSolicitud = seleccionados.map(s => agregarSolicitud('CARÁTULA', s.name, 'Carátulas base'));
+      idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generando...'));
+
+      showWarning('statusCaratulas', 'Procesando carátulas...');
+      try {
+        const res = await callBackend('wProcesarSeleccionados', usuarioActual, seleccionados, ubicacion, caratula);
+        showSuccess('statusCaratulas', res.mensaje);
+        idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generado'));
+      } catch (err) {
+        showError('statusCaratulas', err.message);
+        idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Cancelada'));
+      }
+    }
+
+    async function ejecutarRestauracionBase() {
+      const idPlantilla = document.getElementById('selectPlantilla').value;
+      if (!idPlantilla) return alert('Seleccione plantilla');
+      const idSolicitud = agregarSolicitud('CARÁTULA', 'Anexos 11 y 13', 'Carátulas base');
+      actualizarEstadoSolicitud(idSolicitud, 'Generando...');
+      showWarning('statusCaratulas', 'Restaurando carátulas base...');
+      try {
+        const res = await callBackend('wRestaurarCaratulasBase', usuarioActual, idPlantilla, document.querySelector('input[name="tipoCaratula"]:checked').value);
+        showSuccess('statusCaratulas', res.mensaje);
+        actualizarEstadoSolicitud(idSolicitud, 'Generado');
+      } catch (err) {
+        showError('statusCaratulas', err.message);
+        actualizarEstadoSolicitud(idSolicitud, 'Cancelada');
+      }
+    }
+
+    // ============================
+    // ACCIONES: COMPILADOR
+    // ============================
+    async function probarServidor(seccion) {
+      const hoja = seccion === 'Tomos' ? 'TOMOS' : 'CARATULAS Y COMPILADOS';
+      const celda = 'C8';
+      showWarning(`status${seccion}`, 'Probando servidor...');
+      try {
+        const res = await callBackend('verificarServidor', hoja, celda);
+        showSuccess(`status${seccion}`, res.mensaje);
+      } catch (err) {
+        showError(`status${seccion}`, err.message);
+      }
+    }
+
+    async function ejecutarCompilacion() {
+      const seleccionados = obtenerSeleccionados('treeCompilador');
+      if (!seleccionados.length) return alert('Seleccione carpetas');
+
+      const idsSolicitud = seleccionados.map(s => agregarSolicitud('COMPILADO', s.name, 'Compilados'));
+      idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generando...'));
+
+      showWarning('statusCompilador', 'Enviando a compilar...');
+      try {
+        const res = await callBackend('wProcesarCompilacionSegunModo', usuarioActual, seleccionados, 'COLAB', {
+          duplicados: document.getElementById('politicaDuplicados').value
+        });
+        showSuccess('statusCompilador', res.mensaje);
+        idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generado'));
+        if (res.pendientes) setTimeout(() => consultarPendientesCompilador(), 3000);
+      } catch (err) {
+        showError('statusCompilador', err.message);
+        idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Cancelada'));
+      }
+    }
+
+    async function consultarPendientesCompilador() {
+      showWarning('statusCompilador', 'Consultando pendientes...');
+      try {
+        const res = await callBackend('consultarCompilacionesPendientes');
+        showSuccess('statusCompilador', res.mensaje);
+      } catch (err) {
+        showError('statusCompilador', err.message);
+      }
+    }
+
+    // ============================
+    // ACCIONES: TOMOS
+    // ============================
+    async function ejecutarHerramientaTomos(tipo) {
+      const seleccionados = obtenerSeleccionados('treeTomos');
+      const pdfsManual = obtenerPdfsSeleccionados('treeTomos');
+      if (!seleccionados.length && !pdfsManual.length) return alert('Seleccione carpetas de compilados, o marque PDFs sueltos para armar un tomo manual');
+
+      const nivelSeleccionado = document.querySelector('input[name="nivelProfundidad"]:checked');
+      const config = {
+        numerosTomos: document.getElementById('numerosTomos').value,
+        permitirSinCaratula: document.getElementById('permitirSinCaratula').checked,
+        usarNumeracionManual: document.getElementById('usarNumeracionManual').checked,
+        numeroInicialTomo: document.getElementById('numeroInicialTomo').value,
+        totalGeneralTomos: document.getElementById('totalGeneralTomos').value,
+        pdfsManual: pdfsManual,
+        nivelProfundidad: nivelSeleccionado ? nivelSeleccionado.value : 'general'
+      };
+
+      const etiquetaTipo = tipo === 'calcular' ? 'PROYECCIÓN' : tipo === 'caratulas' ? 'ÍNDICE' : 'TOMO';
+      const origenesCola = seleccionados.length ? seleccionados : [{ name: `${pdfsManual.length} PDF(s) manual(es)` }];
+      const idsSolicitud = origenesCola.map(s => agregarSolicitud(etiquetaTipo, s.name, 'Tomos'));
+      idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generando...'));
+
+      showWarning('statusTomos', 'Ejecutando...');
+      try {
+        let res;
+        if (tipo === 'calcular') res = await callBackend('wHerramienta1_Calcular', usuarioActual, seleccionados, config);
+        else if (tipo === 'caratulas') res = await callBackend('wHerramienta2_Caratulas', usuarioActual, seleccionados, config);
+        else if (tipo === 'fusionar') res = await callBackend('wHerramienta3_GenerarTomos', usuarioActual, seleccionados, config);
+        showSuccess('statusTomos', res.mensaje);
+        idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generado'));
+        if (tipo === 'fusionar' && res.pendientes) setTimeout(() => consultarPendientesTomos(), 3000);
+      } catch (err) {
+        showError('statusTomos', err.message);
+        idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Cancelada'));
+      }
+    }
+
+    async function consultarPendientesTomos() {
+      showWarning('statusTomos', 'Consultando pendientes...');
+      try {
+        const res = await callBackend('consultarTomosPendientes');
+        showSuccess('statusTomos', res.mensaje);
+      } catch (err) {
+        showError('statusTomos', err.message);
+      }
+    }
+
+    // ============================
+    // HISTORIAL CARATULAS Y COMPILADOS
+    // ============================
+    async function cargarHistorial() {
+      const tbody = document.getElementById('historialBody');
+      tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
+      try {
+        const filas = await callBackend('obtenerHistorialPanel', 'CARATULAS Y COMPILADOS');
+        historialData = filas || [];
+        historialPagina = 1;
+        renderHistorial();
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6">Error: ${err.message}</td></tr>`;
+        document.getElementById('historialPaginacion').style.display = 'none';
+      }
+    }
+
+    function renderHistorial() {
+      const tbody = document.getElementById('historialBody');
+      const paginacion = document.getElementById('historialPaginacion');
+      if (!historialData.length) {
+        tbody.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
+        paginacion.style.display = 'none';
+        return;
+      }
+      const totalPaginas = Math.max(1, Math.ceil(historialData.length / HISTORIAL_POR_PAGINA));
+      if (historialPagina > totalPaginas) historialPagina = totalPaginas;
+      const inicio = (historialPagina - 1) * HISTORIAL_POR_PAGINA;
+      const filasPagina = historialData.slice(inicio, inicio + HISTORIAL_POR_PAGINA);
+
+      tbody.innerHTML = '';
+      filasPagina.forEach((fila) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${fila[0] || ''}</td>
+          <td>${fila[1] || ''}</td>
+          <td>${fila[2] || ''}</td>
+          <td>${fila[3] || ''}</td>
+          <td>${fila[4] ? `<a href="${fila[4]}" target="_blank" class="link-drive">Ver archivo</a>` : ''}</td>
+          <td><button class="icon-btn" title="Ver detalles" onclick='mostrarDetalleFila(${JSON.stringify(fila)})'><i class="fa-regular fa-eye"></i></button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('historialRango').textContent =
+        `Mostrando ${inicio + 1} a ${Math.min(inicio + HISTORIAL_POR_PAGINA, historialData.length)} de ${historialData.length} registros`;
+
+      const btnsWrap = document.getElementById('historialPageBtns');
+      btnsWrap.innerHTML = '';
+      const btnAnterior = document.createElement('button');
+      btnAnterior.className = 'page-btn';
+      btnAnterior.textContent = 'Anterior';
+      btnAnterior.disabled = historialPagina === 1;
+      btnAnterior.onclick = () => { historialPagina--; renderHistorial(); };
+      btnsWrap.appendChild(btnAnterior);
+
+      for (let p = 1; p <= totalPaginas; p++) {
+        const b = document.createElement('button');
+        b.className = 'page-btn' + (p === historialPagina ? ' active' : '');
+        b.textContent = p;
+        b.onclick = () => { historialPagina = p; renderHistorial(); };
+        btnsWrap.appendChild(b);
+      }
+
+      const btnSiguiente = document.createElement('button');
+      btnSiguiente.className = 'page-btn';
+      btnSiguiente.textContent = 'Siguiente';
+      btnSiguiente.disabled = historialPagina === totalPaginas;
+      btnSiguiente.onclick = () => { historialPagina++; renderHistorial(); };
+      btnsWrap.appendChild(btnSiguiente);
+
+      paginacion.style.display = 'flex';
+    }
+
+    // ============================
+    // HISTORIAL TOMOS
+    // ============================
+    async function cargarHistorialTomos() {
+      const tbody = document.getElementById('historialTomosBody');
+      tbody.innerHTML = '<tr><td colspan="6">Cargando...</td></tr>';
+      try {
+        const filas = await callBackend('obtenerHistorialPanel', 'TOMOS');
+        historialTomosData = filas || [];
+        historialTomosPagina = 1;
+        renderHistorialTomos();
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6">Error: ${err.message}</td></tr>`;
+        document.getElementById('historialTomosPaginacion').style.display = 'none';
+      }
+    }
+
+    function renderHistorialTomos() {
+      const tbody = document.getElementById('historialTomosBody');
+      const paginacion = document.getElementById('historialTomosPaginacion');
+      if (!historialTomosData.length) {
+        tbody.innerHTML = '<tr><td colspan="6">Sin registros</td></tr>';
+        paginacion.style.display = 'none';
+        return;
+      }
+      const totalPaginas = Math.max(1, Math.ceil(historialTomosData.length / HISTORIAL_TOMOS_POR_PAGINA));
+      if (historialTomosPagina > totalPaginas) historialTomosPagina = totalPaginas;
+      const inicio = (historialTomosPagina - 1) * HISTORIAL_TOMOS_POR_PAGINA;
+      const filasPagina = historialTomosData.slice(inicio, inicio + HISTORIAL_TOMOS_POR_PAGINA);
+
+      tbody.innerHTML = '';
+      filasPagina.forEach((fila) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${fila[0] || ''}</td>
+          <td>${fila[1] || ''}</td>
+          <td>${fila[2] || ''}</td>
+          <td>${fila[3] || ''}</td>
+          <td>${fila[4] ? `<a href="${fila[4]}" target="_blank" class="link-drive">Ver archivo</a>` : ''}</td>
+          <td><button class="icon-btn" title="Ver detalles" onclick='mostrarDetalleFila(${JSON.stringify(fila)})'><i class="fa-regular fa-eye"></i></button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('historialTomosRango').textContent =
+        `Mostrando ${inicio + 1} a ${Math.min(inicio + HISTORIAL_TOMOS_POR_PAGINA, historialTomosData.length)} de ${historialTomosData.length} registros`;
+
+      const btnsWrap = document.getElementById('historialTomosPageBtns');
+      btnsWrap.innerHTML = '';
+      const btnAnterior = document.createElement('button');
+      btnAnterior.className = 'page-btn';
+      btnAnterior.textContent = 'Anterior';
+      btnAnterior.disabled = historialTomosPagina === 1;
+      btnAnterior.onclick = () => { historialTomosPagina--; renderHistorialTomos(); };
+      btnsWrap.appendChild(btnAnterior);
+
+      for (let p = 1; p <= totalPaginas; p++) {
+        const b = document.createElement('button');
+        b.className = 'page-btn' + (p === historialTomosPagina ? ' active' : '');
+        b.textContent = p;
+        b.onclick = () => { historialTomosPagina = p; renderHistorialTomos(); };
+        btnsWrap.appendChild(b);
+      }
+
+      const btnSiguiente = document.createElement('button');
+      btnSiguiente.className = 'page-btn';
+      btnSiguiente.textContent = 'Siguiente';
+      btnSiguiente.disabled = historialTomosPagina === totalPaginas;
+      btnSiguiente.onclick = () => { historialTomosPagina++; renderHistorialTomos(); };
+      btnsWrap.appendChild(btnSiguiente);
+
+      paginacion.style.display = 'flex';
+    }
+
+    // ============================
+    // BORRAR HISTORIAL (común)
+    // ============================
+    async function borrarHistorial(nombreHoja, tbodyId, paginacionId) {
+      if (!confirm('¿Seguro que deseas borrar el historial de ' + nombreHoja + '? Esta acción no se puede deshacer.')) return;
+      try {
+        const res = await callBackend('borrarHistorialPanel', nombreHoja);
+        alert(res.mensaje);
+        if (nombreHoja === 'CARATULAS Y COMPILADOS') {
+          cargarHistorial();
+        } else if (nombreHoja === 'TOMOS') {
+          cargarHistorialTomos();
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    function mostrarDetalleFila(fila) {
+      alert(
+        'Fecha y hora: ' + (fila[0] || '-') +
+        '\nMódulo/Origen: ' + (fila[1] || '-') +
+        '\nTarea/Archivo: ' + (fila[2] || '-') +
+        '\nEstado: ' + (fila[3] || '-') +
+        '\nLink: ' + (fila[4] || '-')
+      );
+    }
+  </script>
+</body>
+</html>

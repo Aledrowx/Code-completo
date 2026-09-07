@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Google Sans', Arial, sans-serif;
+    padding: 0;
+    margin: 0;
+    background: #f7f8fa;
+    color: #202124;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .tab-container {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #ffffff;
+    border-bottom: 1px solid #e1e4e8;
+    padding: 7px 9px 0;
+  }
+
+  .tab {
+    flex: 1;
+    position: relative;
+    padding: 4px 4px 9px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+    color: #6b7280;
+    border-bottom: 3px solid transparent;
+    user-select: none;
+    transition: all .2s ease;
+  }
+
+  .tab::before {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    margin: 0 auto 4px;
+    border: 1.5px solid #d5d9df;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 700;
+    transition: all .2s ease;
+  }
+
+  .tab:nth-child(1)::before {
+    content: "1";
+  }
+
+  .tab:nth-child(2)::before {
+    content: "2";
+  }
+
+  .tab:nth-child(3)::before {
+    content: "3";
+  }
+
+  .tab:hover {
+    background: #fafafa;
+  }
+
+  .tab:hover::before {
+    border-color: #bfc4cc;
+  }
+
+  .tab:nth-child(1).active {
+    color: #c66a08;
+    border-bottom-color: #c66a08;
+  }
+
+  .tab:nth-child(1).active::before {
+    background: #c66a08;
+    border-color: #c66a08;
+    color: #ffffff;
+    box-shadow: 0 2px 7px rgba(198, 106, 8, .18);
+  }
+
+  .tab:nth-child(2).active {
+    color: #2b629d;
+    border-bottom-color: #2b629d;
+  }
+
+  .tab:nth-child(2).active::before {
+    background: #2b629d;
+    border-color: #2b629d;
+    color: #ffffff;
+    box-shadow: 0 2px 7px rgba(43, 98, 157, .18);
+  }
+
+  .tab:nth-child(3).active {
+    color: #3f805d;
+    border-bottom-color: #3f805d;
+  }
+
+  .tab:nth-child(3).active::before {
+    background: #3f805d;
+    border-color: #3f805d;
+    color: #ffffff;
+    box-shadow: 0 2px 7px rgba(63, 128, 93, .18);
+  }
+
+  .content {
+    display: none;
+    padding: 10px 12px 13px;
+  }
+
+  .content.active {
+    display: block;
+  }
+
+  .info-box,
+  .note-box,
+  .warning-box {
+    padding: 9px 10px;
+    margin-bottom: 9px;
+    border-radius: 8px;
+  }
+
+  .info-box {
+    background: #edf3f9;
+    color: #315d87;
+    border: 1px solid #dce6f0;
+  }
+
+  .note-box {
+    background: #eef6f1;
+    color: #356b4c;
+    border: 1px solid #d8e8de;
+  }
+
+  .warning-box {
+    background: #fbf4e9;
+    color: #97601e;
+    border: 1px solid #eeddbd;
+  }
+
+  .section-title {
+    font-weight: 700;
+    margin: 9px 0 5px;
+    color: #292d33;
+    font-size: 12px;
+  }
+
+  .tree-container {
+    height: 185px;
+    overflow: auto;
+    border: 1px solid #dfe3e8;
+    border-radius: 9px;
+    padding: 5px 7px;
+    background: #ffffff;
+    white-space: nowrap;
+    margin: 7px 0 9px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .025);
+  }
+
+  ul {
+    list-style: none;
+    padding-left: 7px;
+    margin: 0;
+  }
+
+  li {
+    margin: 2px 0;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 2px 2px;
+    border-radius: 6px;
+    transition: background .15s ease;
+  }
+
+  li:hover {
+    background: #f7f8fa;
+  }
+
+  li > ul {
+    width: 100%;
+    padding-left: 18px;
+  }
+
+  .folder-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    margin-right: 3px;
+    cursor: pointer;
+    color: #64707d;
+    background: #f4f5f6;
+    border: 1px solid #dce0e5;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 10px;
+    user-select: none;
+    transition: all .15s ease;
+  }
+
+  .folder-toggle:hover {
+    background: #eceef1;
+    border-color: #cbd0d6;
+  }
+
+  li > label {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1;
+    cursor: pointer;
+    color: #30343b;
+    font-size: 11.5px;
+  }
+
+  .folder-chk {
+    width: 14px;
+    height: 14px;
+    margin: 0 7px 0 0;
+    flex-shrink: 0;
+  }
+
+  #tabCaratulas .folder-chk {
+    accent-color: #c66a08;
+  }
+
+  #tabCompilador .folder-chk {
+    accent-color: #2b629d;
+  }
+
+  #tabTomos .folder-chk {
+    accent-color: #3f805d;
+  }
+
+  .btn-select-all {
+    display: inline-block;
+    width: auto;
+    padding: 4px 7px;
+    margin-left: 5px;
+    border: 1px solid #d9dde3;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #ffffff;
+    color: #59616c;
+    font-size: 9.5px;
+    font-weight: 600;
+    vertical-align: middle;
+    transition: all .15s ease;
+    flex-shrink: 0;
+  }
+
+  .btn-select-all:hover {
+    background: #f6f7f8;
+    color: #4b535e;
+    border-color: #c9ced5;
+  }
+
+  .btn-select-all:disabled {
+    cursor: wait;
+    opacity: .65;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 9px 10px;
+    margin-top: 7px;
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+    color: #ffffff;
+    background: #3f805d;
+    font-weight: 700;
+    font-size: 11.5px;
+    transition: transform .15s ease, filter .15s ease;
+  }
+
+  .btn:hover {
+    filter: brightness(.96);
+    transform: translateY(-1px);
+  }
+
+  .btn:active {
+    transform: translateY(0);
+  }
+
+  .btn:disabled {
+    background: #d8dce1;
+    color: #7b8189;
+    cursor: not-allowed;
+    filter: none;
+    transform: none;
+  }
+
+  .btn-secondary {
+    background: #ffffff;
+    color: #414750;
+    border: 1px solid #dce0e5;
+  }
+
+  .btn-secondary:hover {
+    background: #f7f8f9;
+    color: #25282d;
+  }
+
+  .btn-purple {
+    background: #c66a08;
+  }
+
+  .btn-orange {
+    background: #c66a08;
+  }
+
+  .btn-green {
+    background: #3f805d;
+  }
+
+  .btn.action-car {
+    background: #c66a08;
+  }
+
+  #tabCompilador .btn.action-comp {
+    background: #2b629d;
+    color: #ffffff;
+  }
+
+  #tabTomos .btn.action-tomos {
+    background: #3f805d;
+    color: #ffffff;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  select {
+    width: 100%;
+    padding: 8px 9px;
+    margin-bottom: 6px;
+    border: 1px solid #dfe3e8;
+    border-radius: 7px;
+    font: inherit;
+    background: #ffffff;
+    color: #30343b;
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+
+  input[type="text"]:focus,
+  input[type="number"]:focus,
+  select:focus {
+    border-color: #9aa4ae;
+    box-shadow: 0 0 0 2px rgba(90, 100, 110, .08);
+  }
+
+  label.option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 5px 0;
+    cursor: pointer;
+    color: #3f444d;
+  }
+
+  label.option input {
+    flex-shrink: 0;
+  }
+
+  #tabCaratulas label.option input {
+    accent-color: #c66a08;
+  }
+
+  #tabCompilador label.option input {
+    accent-color: #2b629d;
+  }
+
+  #tabTomos label.option input {
+    accent-color: #3f805d;
+  }
+
+  .row-buttons {
+    display: flex;
+    gap: 7px;
+  }
+
+  .row-buttons .btn {
+    margin-top: 0;
+  }
+
+  .row-buttons .btn-secondary {
+    flex: 1;
+  }
+
+  .status-msg {
+    display: none;
+    margin-top: 9px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    font-weight: 600;
+    white-space: pre-wrap;
+    border: 1px solid rgba(0, 0, 0, .06);
+  }
+
+  .small {
+    font-size: 10px;
+    color: #6b7280;
+    line-height: 1.3;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #e3e6ea;
+    margin: 10px 0;
+  }
+
+  #tabCaratulas .note-box[style*="f3e5f5"] {
+    background: #fbf3e8 !important;
+    color: #97601e !important;
+    border: 1px solid #eeddbd !important;
+    border-radius: 9px;
+    padding: 9px 10px;
+  }
+
+  #tabCaratulas .note-box[style*="f3e5f5"] .btn {
+    background: #c66a08;
+  }
+
+  #tabTomos .note-box[style*="f3e5f5"] {
+    background: #eef6f1 !important;
+    color: #356b4c !important;
+    border: 1px solid #d8e8de !important;
+    border-radius: 9px;
+  }
+
+  #soloCarpetasCheck {
+    accent-color: #c66a08;
+  }
+
+  #usarNumeracionManual {
+    accent-color: #3f805d;
+  }
+
+  #tabTomos .row-buttons {
+    gap: 6px;
+  }
+
+  #tabTomos .row-buttons .btn {
+    font-size: 10.5px;
+    padding: 8px 5px;
+  }
+
+  #tabTomos .section-title {
+    margin-top: 8px;
+  }
+
+  #tabTomos .note-box {
+    margin-bottom: 7px;
+  }
+
+  #tabCompilador .tree-container {
+    height: 195px;
+  }
+
+  #tabCompilador .note-box {
+    margin-top: 7px;
+  }
+
+  #tabCaratulas .tree-container {
+    height: 180px;
+  }
+
+  .tree-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .tree-container::-webkit-scrollbar-track {
+    background: #f3f4f5;
+    border-radius: 10px;
+  }
+
+  .tree-container::-webkit-scrollbar-thumb {
+    background: #c8cdd3;
+    border-radius: 10px;
+  }
+
+  .tree-container::-webkit-scrollbar-thumb:hover {
+    background: #adb3bb;
+  }
+
+  body::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  body::-webkit-scrollbar-track {
+    background: #f5f6f7;
+  }
+
+  body::-webkit-scrollbar-thumb {
+    background: #c8cdd3;
+    border-radius: 10px;
+  }
+
+  @media (max-height: 700px) {
+    .tab-container {
+      padding-top: 4px;
+    }
+
+    .tab {
+      padding-bottom: 7px;
+    }
+
+    .tab::before {
+      width: 27px;
+      height: 27px;
+      margin-bottom: 3px;
+      font-size: 12px;
+    }
+
+    .content {
+      padding: 7px 10px 9px;
+    }
+
+    .tree-container {
+      height: 155px;
+    }
+
+    #tabCaratulas .tree-container,
+    #tabCompilador .tree-container {
+      height: 160px;
+    }
+
+    .info-box,
+    .note-box,
+    .warning-box {
+      padding: 7px 9px;
+      margin-bottom: 6px;
+    }
+
+    .section-title {
+      margin-top: 6px;
+      margin-bottom: 4px;
+    }
+
+    .btn {
+      padding: 8px;
+      margin-top: 5px;
+    }
+
+    label.option {
+      margin: 4px 0;
+    }
+
+    .row-buttons {
+      gap: 5px;
+    }
+  }
+
+  #tabCompilador .row-buttons .btn {
+  flex: 1;
+  margin-top: 0;
+}
+</style>
+</head>
+<body>
+  <div class="tab-container">
+    <div class="tab active" onclick="switchTab(this, 'tabCaratulas')">Carátulas</div>
+    <div class="tab" onclick="switchTab(this, 'tabCompilador')">Compilar</div>
+    <div class="tab" onclick="switchTab(this, 'tabTomos')">Tomos</div>
+  </div>
+
+  <div id="tabCaratulas" class="content active">
+    <div class="info-box">Hoja: <b>CARATULAS Y COMPILADOS</b> — C2 origen, C3 plantillas y C4 destino.</div>
+
+    <button class="btn btn-secondary" onclick="cargarArbol('treeCaratulas', 'C2', 'CARATULAS Y COMPILADOS')">Cargar origen (C2)</button>
+    <div class="tree-container"><ul id="treeCaratulas"><li class="small">Esperando carga...</li></ul></div>
+
+    <div class="section-title">Plantilla</div>
+    <select id="selectPlantilla"><option value="">Cargando modelos...</option></select>
+
+    <label class="option"><input type="radio" name="tipoCaratula" value="original" checked> Original: reemplaza XXXXXX/XXXXX/XXXX</label>
+    <label class="option"><input type="radio" name="tipoCaratula" value="nueva"> Nueva: coloca prefijo en YYYY</label>
+
+    <div class="section-title">Ubicación de salida</div>
+    <label class="option"><input type="radio" name="saveType" value="automatico" checked onchange="actualizarModoGuardado()"> Replicar estructura en C4</label>
+    <label class="option"><input type="radio" name="saveType" value="manual" onchange="actualizarModoGuardado()"> Guardar directamente en C4 o subcarpeta</label>
+    <input id="nombreCarpetaManual" type="text" placeholder="Subcarpeta opcional dentro de C4" style="display:none;">
+
+    <div class="note-box warning-box">
+      <label class="option" style="margin:0;"><input type="checkbox" id="soloCarpetasCheck"> <b>Solo crear carpetas, sin generar PDF</b></label>
+    </div>
+
+    <button class="btn action-car" onclick="ejecutarCaratulas()">Generar carátulas/carpetas</button>
+
+    <hr>
+    <div class="note-box" style="background:#f3e5f5;color:#6a1b9a;border-color:#e1bee7;">
+      <b>Carátulas base de Anexos 11 y 13</b>
+      <div class="small" style="margin-top:4px;">Crea únicamente las carátulas fijas de bloque y especiales de los Anexos 11 y 13.</div>
+      <button class="btn btn-purple action-car" onclick="ejecutarRestauracionBase()">Restaurar carátulas base</button>
+    </div>
+
+    <div id="statusCaratulas" class="status-msg"></div>
+  </div>
+
+  <div id="tabCompilador" class="content">
+    <div class="info-box">Hoja: <b>CARATULAS Y COMPILADOS</b> — C2 origen, C4 carátulas, C6 salida y C8 servidor.</div>
+
+    <div class="row-buttons">
+      <button class="btn btn-secondary" onclick="cargarArbol('treeCompilador', 'C2', 'CARATULAS Y COMPILADOS')">Cargar directorios</button>
+      <button class="btn btn-secondary action-comp" onclick="probarServidor('CARATULAS Y COMPILADOS', 'C8', 'Compilador')">Probar servidor</button>
+    </div>
+    <div class="tree-container"><ul id="treeCompilador"><li class="small">Esperando carga...</li></ul></div>
+
+    <div class="section-title">Si ya existe un compilado</div>
+    <select id="politicaDuplicados">
+      <option value="nuevo">Crear uno nuevo con fecha y hora</option>
+      <option value="reemplazar">Enviar los anteriores a la papelera</option>
+      <option value="omitir">Omitir la carpeta</option>
+    </select>
+
+    <div class="note-box">El servidor divide automáticamente cada compilado en bloques de hasta 600 páginas.</div>
+    <div class="row-buttons">
+      <button class="btn action-comp" onclick="ejecutarCompilacion()">Compilar archivos</button>
+      <button class="btn btn-secondary action-comp" onclick="consultarPendientesCompilador()">Consultar pendientes</button>
+    </div>
+    <div id="statusCompilador" class="status-msg"></div>
+  </div>
+
+  <div id="tabTomos" class="content">
+    <div class="info-box">Hoja: <b>TOMOS</b> — C3 plantilla, C4 tomos finales, C5 compilados, C6 índices y C8 servidor.</div>
+
+    <div class="row-buttons">
+      <button class="btn btn-secondary" onclick="cargarArbol('treeTomos', 'C5', 'TOMOS')">Cargar compilados (C5)</button>
+      <button class="btn btn-secondary action-tomos" onclick="probarServidor('TOMOS', 'C8', 'Tomos')">Probar servidor</button>
+    </div>
+    <label class="option"><input type="checkbox" id="chkTomosAll" onchange="toggleSelectAll('treeTomos', this.checked)"> Seleccionar todas las carpetas actualmente cargadas</label>
+    <div class="tree-container"><ul id="treeTomos"><li class="small">Esperando carga...</li></ul></div>
+
+    <div class="section-title">Tomos específicos</div>
+    <input id="numerosTomos" type="text" placeholder="Vacío = todos. Ejemplo: 1, 3, 5">
+    <div class="small" style="margin-bottom:9px;">
+      Los números corresponden a la última proyección guardada. Primero proyecta
+      con todas las carpetas; luego puedes seleccionar una sola carpeta y el índice
+      conservará su posición y el total general, por ejemplo 01/35.
+    </div>
+
+    <div class="note-box" style="background:#f3e5f5;color:#6a1b9a;border-color:#e1bee7;">
+      <label class="option" style="margin:0;">
+        <input type="checkbox" id="usarNumeracionManual" onchange="actualizarModoNumeracionTomos()">
+        <b>Usar numeración manual</b>
+      </label>
+      <div class="small" style="margin-top:4px;">
+        Desmarcado: usa el número global y el total de la última proyección.
+        Vuelve a Proyectar cuando cambien los compilados.
+      </div>
+
+      <div id="bloqueNumeracionManual" style="display:none;margin-top:9px;">
+        <label for="numeroInicialTomo"><b>Número inicial del tomo</b></label>
+        <input id="numeroInicialTomo" type="number" min="1" step="1" placeholder="Ejemplo: 14" disabled>
+
+        <label for="totalGeneralTomos"><b>Total general de tomos</b></label>
+        <input id="totalGeneralTomos" type="number" min="1" step="1" placeholder="Ejemplo: 40" disabled>
+
+        <div class="small">Ejemplo: inicio 14 y total 40 genera 14/40, 15/40, 16/40...</div>
+      </div>
+    </div>
+
+    <label class="option"><input type="checkbox" id="permitirSinCaratula"> Permitir fusionar un tomo aunque falte su carátula</label>
+
+    <div class="row-buttons" style="margin-top:13px;">
+      <button class="btn action-tomos" onclick="ejecutarHerramientaTomos('calcular')">1. Proyectar</button>
+      <button class="btn btn-orange action-tomos" onclick="ejecutarHerramientaTomos('caratulas')">2. Índices</button>
+      <button class="btn btn-green action-tomos" onclick="ejecutarHerramientaTomos('fusionar')">3. Fusionar</button>
+    </div>
+    <button class="btn btn-secondary action-tomos" onclick="consultarPendientesTomos()">Consultar tomos pendientes</button>
+
+    <div id="statusTomos" class="status-msg"></div>
+  </div>
+
+  <script>
+    var lastChecked = null;
+    var estadoLotes = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+      cargarPlantillas();
+      actualizarModoNumeracionTomos();
+    });
+
+    document.addEventListener('click', function(evento) {
+      var target = evento.target;
+      if (!target || !target.classList.contains('folder-chk')) return;
+
+      var activeTree = document.querySelector('.content.active .tree-container');
+      if (!activeTree) return;
+
+      var checkboxes = Array.prototype.slice.call(activeTree.querySelectorAll('.folder-chk'));
+      if (evento.shiftKey && lastChecked) {
+        var inicio = checkboxes.indexOf(target);
+        var fin = checkboxes.indexOf(lastChecked);
+        if (inicio !== -1 && fin !== -1) {
+          var min = Math.min(inicio, fin);
+          var max = Math.max(inicio, fin);
+          for (var i = min; i <= max; i++) checkboxes[i].checked = target.checked;
+        }
+      }
+      lastChecked = target;
+    });
+
+    function switchTab(elemento, tabId) {
+      document.querySelectorAll('.tab').forEach(function(tab) { tab.classList.remove('active'); });
+      document.querySelectorAll('.content').forEach(function(content) { content.classList.remove('active'); });
+      elemento.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+      lastChecked = null;
+    }
+
+    function cargarPlantillas() {
+      google.script.run
+        .withSuccessHandler(function(modelos) {
+          var select = document.getElementById('selectPlantilla');
+          select.innerHTML = '';
+          modelos = Array.isArray(modelos) ? modelos : [];
+          if (!modelos.length) {
+            var vacio = document.createElement('option');
+            vacio.value = '';
+            vacio.textContent = 'No se encontraron plantillas';
+            select.appendChild(vacio);
+            return;
+          }
+
+          modelos.forEach(function(modelo) {
+            var option = document.createElement('option');
+            option.value = modelo.id || '';
+            option.textContent = modelo.name || 'Sin nombre';
+            select.appendChild(option);
+          });
+        })
+        .withFailureHandler(function(error) {
+          var select = document.getElementById('selectPlantilla');
+          select.innerHTML = '';
+          var option = document.createElement('option');
+          option.value = '';
+          option.textContent = '❌ ' + extraerMensajeError(error);
+          select.appendChild(option);
+        })
+        .obtenerModelosDeCaratula('CARATULAS Y COMPILADOS');
+    }
+
+    function actualizarModoGuardado() {
+      var manual = document.querySelector('input[name="saveType"]:checked').value === 'manual';
+      document.getElementById('nombreCarpetaManual').style.display = manual ? 'block' : 'none';
+    }
+
+    function actualizarModoNumeracionTomos() {
+      var check = document.getElementById('usarNumeracionManual');
+      var bloque = document.getElementById('bloqueNumeracionManual');
+      var numeroInicial = document.getElementById('numeroInicialTomo');
+      var totalGeneral = document.getElementById('totalGeneralTomos');
+      var activo = Boolean(check && check.checked);
+
+      if (bloque) bloque.style.display = activo ? 'block' : 'none';
+      if (numeroInicial) numeroInicial.disabled = !activo;
+      if (totalGeneral) totalGeneral.disabled = !activo;
+    }
+
+    function cargarArbol(treeId, celda, hoja) {
+      var ul = document.getElementById(treeId);
+      ul.innerHTML = '';
+      agregarTextoLista(ul, 'Conectando con Google Drive...');
+
+      google.script.run
+      .withSuccessHandler(function(idOrigen) {
+      pedirSubcarpetas(idOrigen, ul, true);
+      })
+      .withFailureHandler(function(error) {
+      ul.innerHTML = '';
+      agregarTextoLista(
+        ul,
+        '❌ ' + extraerMensajeError(error),
+        true
+      );
+      })
+    .obtenerIdDesdeHoja(celda, hoja);
+    }
+
+    function pedirSubcarpetas(folderId, ul, esAnexo) {
+      ul.innerHTML = '';
+      agregarTextoLista(ul, 'Cargando carpetas...');
+
+      google.script.run
+      .withSuccessHandler(function(carpetas) {
+      ul.innerHTML = '';
+      carpetas = Array.isArray(carpetas) ? carpetas : [];
+
+      if (!carpetas.length) {
+        agregarTextoLista(
+          ul,
+          'Carpeta vacía o sin subcarpetas.'
+        );
+        return;
+      }
+
+      carpetas.forEach(function(carpeta) {
+        crearNodoCarpeta(
+          ul,
+          carpeta,
+          Boolean(esAnexo)
+        );
+      });
+      })
+      .withFailureHandler(function(error) {
+      ul.innerHTML = '';
+
+      agregarTextoLista(
+        ul,
+        '❌ ' + extraerMensajeError(error),
+        true
+      );
+      })
+      .obtenerSubcarpetas(folderId);
+    }
+
+    function crearNodoCarpeta(ul, carpeta, esAnexo) {
+      var li = document.createElement('li');
+
+      li.setAttribute(
+      'data-folder-id',
+      carpeta.id
+      );
+
+      var toggle = document.createElement('span');
+
+      toggle.className = 'folder-toggle';
+      toggle.textContent = '[+]';
+
+      toggle.addEventListener('click', function() {
+      expandir(
+      toggle,
+      carpeta.id
+      );
+      });
+
+      var label = document.createElement('label');
+
+      label.style.cursor = 'pointer';
+
+      var checkbox = document.createElement('input');
+
+      checkbox.type = 'checkbox';
+      checkbox.className = 'folder-chk';
+      checkbox.value = carpeta.id;
+
+      checkbox.setAttribute(
+      'data-name',
+      carpeta.name
+      );
+
+      label.appendChild(checkbox);
+
+      label.appendChild(
+      document.createTextNode(
+      ' 📁 ' + carpeta.name
+      )
+      );
+
+      li.appendChild(toggle);
+      li.appendChild(label);
+
+  
+      if (esAnexo) {
+
+      var boton = document.createElement('button');
+
+      boton.type = 'button';
+      boton.className = 'btn-select-all';
+      boton.textContent = 'Seleccionar todo';
+
+      boton.setAttribute(
+      'data-selected-all',
+      'false'
+      );
+
+      boton.addEventListener('click', function(evento) {
+
+        evento.preventDefault();
+        evento.stopPropagation();
+
+      toggleSeleccionAnexo(
+        boton,
+        checkbox,
+        carpeta.id,
+        li
+      );
+      });
+
+      li.appendChild(boton);
+      }
+
+      ul.appendChild(li);
+    }
+
+    function expandir(toggle, folderId) {
+      var li = toggle.parentNode;
+
+      var existente = li.querySelector(
+      ':scope > ul'
+      );
+
+      if (existente) {
+      existente.remove();
+      toggle.textContent = '[+]';
+      return;
+      }
+
+      toggle.textContent = '[-]';
+
+      var subUl = document.createElement('ul');
+
+      li.appendChild(subUl);
+
+      pedirSubcarpetas(
+      folderId,
+      subUl,
+      false
+      );
+    }
+
+    function toggleSeleccionAnexo(
+      boton,
+      checkboxAnexo,
+      folderId,
+      li
+    ) {
+
+      var seleccionar =
+        boton.getAttribute(
+        'data-selected-all'
+        ) !== 'true';
+
+      if (!seleccionar) {
+
+        li.querySelectorAll(
+        '.folder-chk'
+      ).forEach(function(chk) {
+
+      chk.checked = false;
+
+    });
+
+    checkboxAnexo.checked = false;
+
+    boton.setAttribute(
+      'data-selected-all',
+      'false'
+    );
+
+    boton.textContent =
+      'Seleccionar todo';
+
+    lastChecked = null;
+
+    return;
+  }
+
+  checkboxAnexo.checked = true;
+
+  boton.disabled = true;
+
+  boton.textContent =
+    'Cargando...';
+
+  seleccionarTodasLasSubcarpetas(
+    folderId,
+    li
+  )
+  .then(function() {
+
+    li.querySelectorAll(
+      '.folder-chk'
+    ).forEach(function(chk) {
+
+      chk.checked = true;
+
+    });
+
+    boton.setAttribute(
+      'data-selected-all',
+      'true'
+    );
+
+    boton.textContent =
+      'Deseleccionar todo';
+
+    boton.disabled = false;
+
+    lastChecked = null;
+
+  })
+    .catch(function(error) {
+
+    boton.disabled = false;
+
+    boton.textContent =
+      'Seleccionar todo';
+
+    checkboxAnexo.checked = false;
+
+    alert(
+      'No se pudieron cargar todas las carpetas: ' +
+      extraerMensajeError(error)
+    );
+    });
+    }
+
+    function seleccionarTodasLasSubcarpetas(
+      folderId,
+      li
+    ) {
+
+      return new Promise(function(resolve, reject) {
+
+        google.script.run
+          .withSuccessHandler(function(carpetas) {
+
+            carpetas = Array.isArray(carpetas)
+              ? carpetas
+              : [];
+
+            if (!carpetas.length) {
+            resolve();
+            return;
+            }
+
+            var subUl = li.querySelector(
+            ':scope > ul'
+            );
+
+            if (!subUl) {
+
+              subUl =
+                document.createElement('ul');
+
+              li.appendChild(subUl);
+            }
+
+            subUl.innerHTML = '';
+
+            var promesas = [];
+
+            carpetas.forEach(function(carpeta) {
+
+              crearNodoCarpeta(
+              subUl,
+              carpeta,
+              false
+              );
+
+            var nuevoLi =
+              subUl.lastElementChild;
+
+            var chk =
+              nuevoLi.querySelector(
+                ':scope > label .folder-chk'
+              );
+
+            if (chk) {
+              chk.checked = true;
+            }
+
+            promesas.push(
+              seleccionarTodasLasSubcarpetas(
+                carpeta.id,
+                nuevoLi
+              )
+            );
+          });
+
+          Promise.all(promesas)
+            .then(function() {
+            resolve();
+            })
+            .catch(function(error) {
+            reject(error);
+            });
+
+        })
+        .withFailureHandler(function(error) {
+
+        reject(error);
+
+        })
+        .obtenerSubcarpetas(folderId);
+
+        });
+      }
+
+    function agregarTextoLista(ul, texto, error) {
+      var li = document.createElement('li');
+      li.textContent = texto;
+      li.style.color = error ? '#d93025' : '#777';
+      ul.appendChild(li);
+    }
+
+    function toggleSelectAll(treeId, checked) {
+      document.getElementById(treeId).querySelectorAll('.folder-chk').forEach(function(chk) {
+        chk.checked = checked;
+      });
+      lastChecked = null;
+    }
+
+    function obtenerSeleccionados(treeId) {
+      var salida = [];
+      document.getElementById(treeId).querySelectorAll('.folder-chk:checked').forEach(function(chk) {
+        salida.push({ id: chk.value, name: chk.getAttribute('data-name') });
+      });
+      return salida;
+    }
+
+    function limpiarCheckboxes(treeId) {
+      document.getElementById(treeId).querySelectorAll('.folder-chk:checked').forEach(function(chk) {
+        chk.checked = false;
+      });
+      if (treeId === 'treeTomos') document.getElementById('chkTomosAll').checked = false;
+      lastChecked = null;
+    }
+
+    function setBusy(clase, busy) {
+      document.querySelectorAll('.' + clase).forEach(function(btn) { btn.disabled = busy; });
+    }
+
+    function mostrarMensaje(seccion, resultado, esError) {
+      var div = document.getElementById('status' + seccion);
+      var mensaje = typeof resultado === 'string' ? resultado : (resultado && resultado.mensaje ? resultado.mensaje : JSON.stringify(resultado));
+      var estado = resultado && resultado.status ? resultado.status : (esError ? 'error' : 'success');
+      var error = esError || estado === 'error';
+      var parcial = estado === 'partial' || estado === 'pending';
+
+      div.style.display = 'block';
+      div.style.background = error ? '#fce8e6' : (parcial ? '#fff3e0' : '#e6f4ea');
+      div.style.color = error ? '#d93025' : (parcial ? '#b06000' : '#137333');
+      div.textContent = mensaje;
+    }
+
+    function extraerMensajeError(error) {
+      return error && error.message ? error.message : String(error || 'Error desconocido');
+    }
+
+    function ejecutarCaratulas() {
+      var seleccionados = obtenerSeleccionados('treeCaratulas');
+      if (!seleccionados.length) return alert('Selecciona al menos una carpeta.');
+
+      var soloCarpetas = document.getElementById('soloCarpetasCheck').checked;
+      var idPlantilla = document.getElementById('selectPlantilla').value;
+      if (!soloCarpetas && !idPlantilla) return alert('Selecciona una plantilla válida.');
+
+      var ubicacion = {
+        tipo: document.querySelector('input[name="saveType"]:checked').value,
+        soloCarpetas: soloCarpetas,
+        nombreNuevaCarpeta: document.getElementById('nombreCarpetaManual').value
+      };
+      var caratula = {
+        idPlantilla: idPlantilla,
+        tipo: document.querySelector('input[name="tipoCaratula"]:checked').value
+      };
+
+      estadoLotes = { procesados: 0, creados: 0, omitidos: 0, errores: 0 };
+      setBusy('action-car', true);
+      procesarLoteCaratulas(seleccionados, 0, ubicacion, caratula);
+    }
+
+    function procesarLoteCaratulas(todos, indice, ubicacion, caratula) {
+      var tamano = 5;
+      if (indice >= todos.length) {
+        var estado = estadoLotes.errores ? 'partial' : 'success';
+        mostrarMensaje('Caratulas', {
+          status: estado,
+          mensaje: (estado === 'partial' ? '⚠️ ' : '✅ ') + 'Proceso terminado. Carpetas: ' + estadoLotes.procesados +
+            ' | PDF creados: ' + estadoLotes.creados + ' | Omitidos: ' + estadoLotes.omitidos + ' | Errores: ' + estadoLotes.errores
+        });
+        setBusy('action-car', false);
+        limpiarCheckboxes('treeCaratulas');
+        return;
+      }
+
+      var lote = todos.slice(indice, indice + tamano);
+      mostrarMensaje('Caratulas', '⏳ Procesando ' + Math.min(indice + tamano, todos.length) + ' de ' + todos.length + ' carpetas...');
+
+      google.script.run
+        .withSuccessHandler(function(resultado) {
+          resultado = resultado || {};
+          estadoLotes.procesados += Number(resultado.procesados || 0);
+          estadoLotes.creados += Number(resultado.pdfsCreados || 0);
+          estadoLotes.omitidos += Number(resultado.omitidos || 0);
+
+          if (Array.isArray(resultado.errores)) {
+            estadoLotes.errores += resultado.errores.length;
+          } else {
+            estadoLotes.errores += Number(resultado.errores || 0);
+          }
+
+          procesarLoteCaratulas(todos, indice + tamano, ubicacion, caratula);
+        })
+        .withFailureHandler(function(error) {
+          mostrarMensaje('Caratulas', '❌ ' + extraerMensajeError(error), true);
+          setBusy('action-car', false);
+        })
+        .procesarSeleccionados(lote, ubicacion, caratula);
+    }
+
+    function ejecutarRestauracionBase() {
+      var idPlantilla = document.getElementById('selectPlantilla').value;
+      if (!idPlantilla) return alert('Selecciona una plantilla válida.');
+
+      setBusy('action-car', true);
+      mostrarMensaje('Caratulas', '⏳ Restaurando carátulas base...');
+      google.script.run
+        .withSuccessHandler(function(resultado) {
+          mostrarMensaje('Caratulas', resultado);
+          setBusy('action-car', false);
+        })
+        .withFailureHandler(function(error) {
+          mostrarMensaje('Caratulas', '❌ ' + extraerMensajeError(error), true);
+          setBusy('action-car', false);
+        })
+        .restaurarCaratulasBase(idPlantilla, document.querySelector('input[name="tipoCaratula"]:checked').value);
+    }
+
+    function probarServidor(hoja, celda, seccion) {
+      var clase = seccion === 'Tomos' ? 'action-tomos' : 'action-comp';
+      setBusy(clase, true);
+      mostrarMensaje(seccion, '⏳ Comprobando servidor...');
+      google.script.run
+        .withSuccessHandler(function(resultado) {
+          mostrarMensaje(seccion, resultado);
+          setBusy(clase, false);
+        })
+        .withFailureHandler(function(error) {
+          mostrarMensaje(seccion, '❌ ' + extraerMensajeError(error), true);
+          setBusy(clase, false);
+        })
+        .verificarServidor(hoja, celda);
+    }
+
+    var timerPollingCompilador = null;
+var timerPollingTomos = null;
+
+function iniciarPollingCompilador() {
+  if (timerPollingCompilador) clearInterval(timerPollingCompilador);
+  consultarPendientesCompilador(true);
+  timerPollingCompilador = setInterval(function() {
+    consultarPendientesCompilador(true);
+  }, 3000);
+}
+
+function detenerPollingCompilador() {
+  if (timerPollingCompilador) {
+    clearInterval(timerPollingCompilador);
+    timerPollingCompilador = null;
+  }
+}
+
+function iniciarPollingTomos() {
+  if (timerPollingTomos) clearInterval(timerPollingTomos);
+  consultarPendientesTomos(true);
+  timerPollingTomos = setInterval(function() {
+    consultarPendientesTomos(true);
+  }, 3000);
+}
+
+function detenerPollingTomos() {
+  if (timerPollingTomos) {
+    clearInterval(timerPollingTomos);
+    timerPollingTomos = null;
+  }
+}
+
+function ejecutarCompilacion() {
+  var seleccionados = obtenerSeleccionados('treeCompilador');
+  if (!seleccionados.length) return alert('Selecciona al menos una carpeta.');
+
+  setBusy('action-comp', true);
+  mostrarMensaje('Compilador', '⏳ Preparando y enviando compilaciones al servidor...');
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      mostrarMensaje('Compilador', resultado);
+      setBusy('action-comp', false);
+      limpiarCheckboxes('treeCompilador');
+      setTimeout(iniciarPollingCompilador, 2000);
+    })
+    .withFailureHandler(function(error) {
+      mostrarMensaje('Compilador', '❌ ' + extraerMensajeError(error), true);
+      setBusy('action-comp', false);
+    })
+    .procesarCompilacionSegunModo(seleccionados, 'COLAB', {
+      duplicados: document.getElementById('politicaDuplicados').value
+    });
+}
+
+function consultarPendientesCompilador(esAutomatico) {
+  if (!esAutomatico) setBusy('action-comp', true);
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      mostrarMensaje('Compilador', resultado);
+      if (!esAutomatico) setBusy('action-comp', false);
+
+      var textoMsg = typeof resultado === 'string'
+        ? resultado
+        : JSON.stringify(resultado);
+
+      if (
+        textoMsg.indexOf('No existen') !== -1 ||
+        textoMsg.indexOf('terminada') !== -1 ||
+        textoMsg.indexOf('éxito') !== -1 ||
+        textoMsg.indexOf('Error') !== -1
+      ) {
+        detenerPollingCompilador();
+      }
+    })
+    .withFailureHandler(function(error) {
+      mostrarMensaje('Compilador', '❌ ' + extraerMensajeError(error), true);
+      if (!esAutomatico) setBusy('action-comp', false);
+      detenerPollingCompilador();
+    })
+    .consultarCompilacionesPendientes();
+}
+
+function consultarPendientesTomos(esAutomatico) {
+  if (!esAutomatico) setBusy('action-tomos', true);
+
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      mostrarMensaje('Tomos', resultado);
+      if (!esAutomatico) setBusy('action-tomos', false);
+
+      var textoMsg = typeof resultado === 'string'
+        ? resultado
+        : JSON.stringify(resultado);
+
+      if (
+        textoMsg.indexOf('No existen') !== -1 ||
+        textoMsg.indexOf('ensamblado') !== -1 ||
+        textoMsg.indexOf('éxito') !== -1 ||
+        textoMsg.indexOf('Error') !== -1
+      ) {
+        detenerPollingTomos();
+      }
+    })
+    .withFailureHandler(function(error) {
+      mostrarMensaje('Tomos', '❌ ' + extraerMensajeError(error), true);
+      if (!esAutomatico) setBusy('action-tomos', false);
+      detenerPollingTomos();
+    })
+    .consultarTomosPendientes();
+}
+
+    function ejecutarHerramientaTomos(tipo) {
+      var seleccionados = obtenerSeleccionados('treeTomos');
+      if (!seleccionados.length) return alert('Selecciona al menos una carpeta de compilados.');
+
+      var usarManual = document.getElementById('usarNumeracionManual').checked;
+      var numeroInicial = document.getElementById('numeroInicialTomo').value;
+      var totalGeneral = document.getElementById('totalGeneralTomos').value;
+
+      if (usarManual) {
+        var inicialNumero = parseInt(numeroInicial, 10);
+        var totalNumero = parseInt(totalGeneral, 10);
+
+        if (isNaN(inicialNumero) || inicialNumero < 1) {
+          return alert('Ingresa un número inicial de tomo mayor que cero.');
+        }
+
+        if (isNaN(totalNumero) || totalNumero < 1) {
+          return alert('Ingresa un total general de tomos mayor que cero.');
+        }
+      }
+
+      var config = {
+        numerosTomos: document.getElementById('numerosTomos').value,
+        permitirSinCaratula: document.getElementById('permitirSinCaratula').checked,
+        usarNumeracionManual: usarManual,
+        numeroInicialTomo: numeroInicial,
+        totalGeneralTomos: totalGeneral
+      };
+
+      setBusy('action-tomos', true);
+      mostrarMensaje('Tomos', '⏳ Ejecutando proceso de tomos...');
+
+      var runner = google.script.run
+        .withSuccessHandler(function(resultado) {
+          mostrarMensaje('Tomos', resultado);
+          setBusy('action-tomos', false);
+          if (tipo !== 'calcular') limpiarCheckboxes('treeTomos');
+        })
+        .withFailureHandler(function(error) {
+          mostrarMensaje('Tomos', '❌ ' + extraerMensajeError(error), true);
+          setBusy('action-tomos', false);
+        });
+
+      if (tipo === 'calcular') runner.herramienta1_Calcular(seleccionados, config);
+      else if (tipo === 'caratulas') runner.herramienta2_Caratulas(seleccionados, config);
+      else if (tipo === 'fusionar') runner.herramienta3_GenerarTomos(seleccionados, config);
+      else {
+        setBusy('action-tomos', false);
+        mostrarMensaje('Tomos', '❌ Herramienta no reconocida.', true);
+      }
+    }
+  </script>
+</body>
+</html>
