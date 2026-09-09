@@ -249,6 +249,45 @@ function wHerramienta3_GenerarTomos(usuario, seleccionados, config) {
   return resultado;
 }
 
+// 👇 NUEVO: elimina (envía a la papelera) los archivos generados de una
+// solicitud cancelada desde la Cola de Solicitudes del panel web.
+function wEliminarArchivosGenerados(usuario, fileIds) {
+  if (!Array.isArray(fileIds) || !fileIds.length) {
+    return { status: 'success', eliminados: 0, errores: 0, mensaje: 'No había archivos que eliminar.' };
+  }
+
+  var eliminados = 0;
+  var errores = [];
+
+  fileIds.forEach(function(id) {
+    if (!id) return;
+    try {
+      var file = DriveApp.getFileById(id);
+      if (!file.isTrashed()) file.setTrashed(true);
+      eliminados++;
+    } catch (err) {
+      errores.push(String(id) + ': ' + err.message);
+    }
+  });
+
+  registrarAuditoria_(
+    'CARATULAS Y COMPILADOS',
+    usuario,
+    'Canceló solicitud: envió a la papelera ' + eliminados + ' archivo(s)' +
+    (errores.length ? ' (' + errores.length + ' con error)' : '')
+  );
+
+  return {
+    status: errores.length ? (eliminados ? 'partial' : 'error') : 'success',
+    eliminados: eliminados,
+    errores: errores.length,
+    detalleErrores: errores,
+    mensaje: errores.length
+      ? '⚠️ Se enviaron a la papelera ' + eliminados + ' archivo(s), con ' + errores.length + ' error(es).'
+      : '🗑️ Se envió a la papelera ' + eliminados + ' archivo(s) correctamente.'
+  };
+}
+
 // ====================================================================
 // 📊 ACCESO ESTRICTO A HOJAS POR NOMBRE
 // ====================================================================
