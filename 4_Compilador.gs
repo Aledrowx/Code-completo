@@ -1,846 +1,531 @@
 // ====================================================================
-// 📚 MÓDULO 3: CÁLCULO, ÍNDICES Y ENSAMBLAJE DE TOMOS
+// 🚀 MÓDULO 2: NÚCLEO DEL COMPILADOR AVANZADO
 // ====================================================================
 
-var ID_SELECCION_MANUAL_TOMOS = 'SELECCION_MANUAL_PDF';
-
-function procesarCalculoMatematico(seleccionados, config) {
-  var filtrados = filtrarSeleccionadosMasEspecificos(seleccionados);
-  var archivos = [];
-  var omitidos = [];
-  var idsVistos = {};
-
-  filtrados.forEach(function(sel) {
-    if (sel.id === ID_SELECCION_MANUAL_TOMOS) return;
-    var infoAnexo = extraerInfoAnexo_(sel.name);
-    var carpeta = DriveApp.getFolderById(sel.id);
-
-    var nivel = (config && config.nivelProfundidad) ? config.nivelProfundidad : 'general';
-    var encontrados;
-    if (nivel === 'general') {
-      encontrados = listarPdfsRecursivo(carpeta, [sel.name]);
-    } else {
-      var nivelNum = parseInt(nivel, 10);
-      if (isNaN(nivelNum) || nivelNum < 1) nivelNum = 1;
-      encontrados = listarPdfsHastaNivel(carpeta, [sel.name], nivelNum);
-    }
-
-    encontrados.forEach(function(item) {
-      var file = item.file;
-      if (idsVistos[file.getId()]) return;
-      idsVistos[file.getId()] = true;
-
-      var paginas = extraerPaginasDelNombre_(file.getName());
-      if (!paginas) {
-        omitidos.push({
-          id: file.getId(),
-          nombre: file.getName(),
-          url: file.getUrl(),
-          carpetaOrigen: sel.name,
-          carpetaOrigenId: sel.id,
-          ruta: item.path.join(' / '),
-          motivo: 'El nombre no contiene una cantidad de páginas reconocible.'
-        });
-        return;
-      }
-
-      archivos.push({
-        id: file.getId(),
-        nombreOriginal: file.getName(),
-        esNumerado: infoAnexo.esNumerado,
-        segmentos: infoAnexo.segmentos.slice(),
-        numAnexoStr: infoAnexo.numAnexoStr,
-        descAnexo: infoAnexo.descAnexo,
-        paginasFisicas: paginas,
-        paginasFoleo: paginas,
-        tamano: Number(file.getSize()) || 0,
-        actualizadoMs: file.getLastUpdated().getTime(),
-        carpetaOrigen: sel.name,
-        carpetaOrigenId: sel.id,
-        ruta: item.path.join(' / ')
-      });
-    });
-  });
-
-  var pdfsManual = (config && Array.isArray(config.pdfsManual)) ? config.pdfsManual : [];
-  pdfsManual.forEach(function(p) {
-    if (!p || !p.id || idsVistos[p.id]) return;
-    idsVistos[p.id] = true;
-    try {
-      var file = DriveApp.getFileById(p.id);
-      var paginas = extraerPaginasDelNombre_(file.getName()) || Number(p.paginas) || 0;
-      if (!paginas) {
-        var conteo = obtenerPaginasDePdf(file.getId());
-        if (conteo.length && conteo[0].paginas > 0) paginas = conteo[0].paginas;
-      }
-      if (!paginas) {
-        omitidos.push({
-          id: p.id,
-          nombre: file.getName(),
-          url: file.getUrl(),
-          carpetaOrigen: p.carpetaOrigen || 'Selección manual',
-          carpetaOrigenId: ID_SELECCION_MANUAL_TOMOS,
-          ruta: p.carpetaOrigen || 'Selección manual',
-          motivo: 'No se pudo determinar la cantidad de páginas de este PDF.'
-        });
-        return;
-      }
-
-      var nombreCarpetaReal = p.carpetaOrigen ? String(p.carpetaOrigen) : '';
-      var infoAnexoManual = nombreCarpetaReal
-        ? extraerInfoAnexo_(nombreCarpetaReal)
-        : { esNumerado: false, segmentos: [], numAnexoStr: '', descAnexo: '' };
-
-      archivos.push({
-        id: file.getId(),
-        nombreOriginal: file.getName(),
-        esNumerado: infoAnexoManual.esNumerado,
-        segmentos: infoAnexoManual.segmentos.slice(),
-        numAnexoStr: infoAnexoManual.numAnexoStr,
-        descAnexo: infoAnexoManual.descAnexo,
-        paginasFisicas: paginas,
-        paginasFoleo: paginas,
-        tamano: Number(file.getSize()) || 0,
-        actualizadoMs: file.getLastUpdated().getTime(),
-        carpetaOrigen: nombreCarpetaReal || 'Selección manual',
-        carpetaOrigenId: ID_SELECCION_MANUAL_TOMOS,
-        ruta: nombreCarpetaReal || 'Selección manual',
-        forzarTomoManual: true
-      });
-    } catch (error) {
-      omitidos.push({
-        id: p.id,
-        nombre: p.name || p.id,
-        url: '',
-        carpetaOrigen: p.carpetaOrigen || 'Selección manual',
-        carpetaOrigenId: ID_SELECCION_MANUAL_TOMOS,
-        ruta: '',
-        motivo: 'No se pudo abrir el archivo: ' + error.message
-      });
-    }
-  });
-
-  if (!archivos.length) return { tomos: [], omitidos: omitidos };
-
-  var archivosManual = archivos.filter(function(a) { return a.forzarTomoManual; });
-  var archivosAuto = archivos.filter(function(a) { return !a.forzarTomoManual; });
-
-  archivosAuto.sort(compararArchivosTomos_);
-
-  var tomos = [];
-  var actual = crearTomoVacio_(1);
-  var capacidadContenido = obtenerCapacidadContenidoTomo_();
-
-  archivosAuto.forEach(function(pdf) {
-    if (actual.archivos.length && actual.totalContenido + pdf.paginasFisicas > capacidadContenido) {
-      tomos.push(actual);
-      actual = crearTomoVacio_(tomos.length + 1);
-    }
-    agregarPdfATomo_(actual, pdf);
-  });
-
-  if (actual.archivos.length) tomos.push(actual);
-
-  tomos = absorberTomosPequenosSeguro_(tomos);
-
-  if (archivosManual.length) {
-    var tomoManual = crearTomoVacio_(tomos.length + 1);
-    archivosManual.forEach(function(pdf) { agregarPdfATomo_(tomoManual, pdf); });
-    tomoManual.excedeLimite = tomoManual.totalContenido > capacidadContenido;
-    tomos.push(tomoManual);
-  }
-
-  recalcularTomos_(tomos);
-  return { tomos: tomos, omitidos: omitidos };
-}
-
-function obtenerReservaCaratulaTomo_() {
-  var valor = Number(obtenerValorConfigSistema_('CARATULAS_NO_FOLIADAS_POR_TOMO', 1));
-  return isFinite(valor) && valor >= 0 ? Math.floor(valor) : 1;
-}
-
-function obtenerCapacidadContenidoTomo_() {
-  var limite = Number(obtenerValorConfigSistema_('LIMITE_PAGINAS', 600));
-  var reserva = obtenerReservaCaratulaTomo_();
-  return Math.max(1, Math.floor(limite) - reserva);
-}
-
-function extraerInfoAnexo_(nombreCarpeta) {
-  var nombre = String(nombreCarpeta || '').trim();
-  var match = nombre.match(/^(?:ANEXO\s*)?(\d+(?:\.\d+)*)\.?\s*(.*)/i);
-  var esNumerado = Boolean(match);
-  var numero = esNumerado ? match[1] : '';
-  var descripcionBruta = esNumerado ? match[2] : nombre;
-  descripcionBruta = descripcionBruta.replace(/^[\s.\-–—_:]+/, '').trim();
-  var descripcion = descripcionBruta
-    ? descripcionBruta.charAt(0).toUpperCase() + descripcionBruta.slice(1).toLowerCase()
-    : '';
-  return {
-    esNumerado: esNumerado,
-    segmentos: esNumerado ? numero.split('.').map(function(v) { return parseInt(v, 10); }) : [],
-    numAnexoStr: numero,
-    descAnexo: descripcion
-  };
-}
-
-function extraerPaginasDelNombre_(nombre) {
-  var match = String(nombre || '').match(/\((\d+)\s*p[aá]g(?:\.|ina)?s?\s*\)/i);
-  return match ? parseInt(match[1], 10) : 0;
-}
-
-function normalizarPdfOmitido_(omitido) {
-  if (omitido && typeof omitido === 'object') {
-    return {
-      id: omitido.id ? String(omitido.id) : '',
-      nombre: omitido.nombre ? String(omitido.nombre) : 'PDF sin nombre',
-      url: omitido.url ? String(omitido.url) : '',
-      carpetaOrigen: omitido.carpetaOrigen ? String(omitido.carpetaOrigen) : '',
-      ruta: omitido.ruta ? String(omitido.ruta) : '',
-      motivo: omitido.motivo ? String(omitido.motivo) : 'No se pudo determinar la cantidad de páginas.'
-    };
-  }
-  return {
-    id: '',
-    nombre: String(omitido || 'PDF sin nombre'),
-    url: '',
-    carpetaOrigen: '',
-    ruta: '',
-    motivo: 'No se pudo determinar la cantidad de páginas.'
-  };
-}
-
-function ordenarPdfsOmitidos_(omitidos) {
-  return (omitidos || []).map(normalizarPdfOmitido_).sort(function(a, b) {
-    var porCarpeta = a.carpetaOrigen.localeCompare(b.carpetaOrigen, 'es', { numeric: true, sensitivity: 'base' });
-    if (porCarpeta !== 0) return porCarpeta;
-    return a.nombre.localeCompare(b.nombre, 'es', { numeric: true, sensitivity: 'base' });
-  });
-}
-
-function crearFilasPdfsOmitidos_(omitidos) {
-  var lista = ordenarPdfsOmitidos_(omitidos);
-  if (!lista.length) return [];
-  var filas = [['', '⚠️ PDF OMITIDOS (' + lista.length + ')', 'No incluidos en la proyección', 'Corrige el nombre y vuelve a ejecutar “1. Proyectar”.', '']];
-  lista.forEach(function(omitido) {
-    var ubicacion = [];
-    if (omitido.carpetaOrigen) ubicacion.push('Carpeta: ' + omitido.carpetaOrigen);
-    if (omitido.ruta) ubicacion.push('Ruta: ' + omitido.ruta);
-    filas.push(['', 'PDF OMITIDO', omitido.nombre, omitido.motivo + (ubicacion.length ? ' | ' + ubicacion.join(' | ') : ''), omitido.url]);
-  });
-  return filas;
-}
-
-function resumenPdfsOmitidos_(omitidos, limite) {
-  var lista = ordenarPdfsOmitidos_(omitidos);
-  var maximo = Math.max(1, Number(limite) || 6);
-  var nombres = lista.slice(0, maximo).map(function(item) { return item.nombre; });
-  if (!nombres.length) return '';
-  return nombres.join(' | ') + (lista.length > maximo ? ' | … y ' + (lista.length - maximo) + ' más' : '');
-}
-
-function compararArchivosTomos_(a, b) {
-  if (a.esNumerado !== b.esNumerado) return a.esNumerado ? 1 : -1;
-  if (a.esNumerado) {
-    var max = Math.max(a.segmentos.length, b.segmentos.length);
-    for (var i = 0; i < max; i++) {
-      if (i >= a.segmentos.length) return -1;
-      if (i >= b.segmentos.length) return 1;
-      if (a.segmentos[i] !== b.segmentos[i]) return a.segmentos[i] - b.segmentos[i];
-    }
-  }
-  return a.nombreOriginal.localeCompare(b.nombreOriginal, 'es', { numeric: true, sensitivity: 'base' });
-}
-
-function crearTomoVacio_(numero) {
-  return { numero: numero, archivos: [], totalContenido: 0, totalFisicas: 0, totalFoleo: 0, excedeLimite: false };
-}
-
-function agregarPdfATomo_(tomo, pdf) {
-  tomo.archivos.push(pdf);
-  tomo.totalContenido += pdf.paginasFisicas;
-  tomo.totalFoleo += pdf.paginasFoleo;
-  tomo.totalFisicas = tomo.totalContenido + obtenerReservaCaratulaTomo_();
-}
-
-function absorberTomosPequenosSeguro_(tomos) {
-  var salida = tomos.slice();
-  var limite = Number(obtenerValorConfigSistema_('LIMITE_PAGINAS', 600));
-  var minimo = Number(obtenerValorConfigSistema_('LIMITE_MINIMO_TOMO', 150));
-  var reserva = obtenerReservaCaratulaTomo_();
-  var i = 0;
-
-  function paginasFinalesCombinadas(a, b) { return a.totalContenido + b.totalContenido + reserva; }
-
-  while (i < salida.length && salida.length > 1) {
-    var tomo = salida[i];
-    if (tomo.totalFisicas >= minimo) { i++; continue; }
-    if (i > 0 && paginasFinalesCombinadas(salida[i - 1], tomo) <= limite) {
-      salida[i - 1].archivos = salida[i - 1].archivos.concat(tomo.archivos);
-      salida.splice(i, 1);
-      recalcularTomoIndividual_(salida[i - 1]);
-      i = Math.max(0, i - 1);
-      continue;
-    }
-    if (i < salida.length - 1 && paginasFinalesCombinadas(tomo, salida[i + 1]) <= limite) {
-      tomo.archivos = tomo.archivos.concat(salida[i + 1].archivos);
-      salida.splice(i + 1, 1);
-      recalcularTomoIndividual_(tomo);
-      continue;
-    }
-    i++;
-  }
-  return salida;
-}
-
-function recalcularTomoIndividual_(tomo) {
-  tomo.totalContenido = 0;
-  tomo.totalFoleo = 0;
-  tomo.archivos.forEach(function(pdf) {
-    pdf.startFoleo = tomo.totalFoleo + 1;
-    pdf.endFoleo = tomo.totalFoleo + pdf.paginasFoleo;
-    tomo.totalContenido += pdf.paginasFisicas;
-    tomo.totalFoleo += pdf.paginasFoleo;
-  });
-  tomo.totalFisicas = tomo.totalContenido + obtenerReservaCaratulaTomo_();
-  tomo.excedeLimite = tomo.totalFisicas > Number(obtenerValorConfigSistema_('LIMITE_PAGINAS', 600));
-}
-
-function recalcularTomos_(tomos) {
-  tomos.forEach(function(tomo, indice) {
-    tomo.numero = indice + 1;
-    recalcularTomoIndividual_(tomo);
-  });
-}
-
-function seleccionarTomos_(tomos, config) {
-  var texto = String((config && config.numerosTomos) || '').trim();
-  if (!texto) return tomos.slice();
-  var elegidos = {};
-  texto.split(',').forEach(function(valor) {
-    var n = parseInt(valor.trim(), 10);
-    if (!isNaN(n) && n > 0) elegidos[n] = true;
-  });
-  var seleccionados = tomos.filter(function(tomo) { return Boolean(elegidos[tomo.numero]); });
-  if (!seleccionados.length) throw new Error('No se indicó ningún número de tomo válido.');
-  return seleccionados;
-}
-
-function resolverNumeracionTomos_(tomosSeleccionados, totalAutomatico, config) {
-  var usarManual = Boolean(config && config.usarNumeracionManual);
-  var inicio, totalVisible;
-  if (usarManual) {
-    inicio = parseInt(config.numeroInicialTomo, 10);
-    totalVisible = parseInt(config.totalGeneralTomos, 10);
-    if (isNaN(inicio) || inicio < 1) throw new Error('El número inicial manual del tomo debe ser mayor que cero.');
-    if (isNaN(totalVisible) || totalVisible < 1) throw new Error('El total general manual de tomos debe ser mayor que cero.');
-    var ultimoManual = inicio + tomosSeleccionados.length - 1;
-    if (ultimoManual > totalVisible) throw new Error('La numeración manual terminaría en el tomo ' + ultimoManual + ', pero el total general indicado es ' + totalVisible + '.');
-  } else {
-    inicio = 0;
-    totalVisible = totalAutomatico;
-  }
-  var ultimoVisible = usarManual ? inicio + tomosSeleccionados.length - 1 : totalAutomatico;
-  var ancho = Math.max(2, String(Math.max(totalVisible, ultimoVisible)).length);
-  return tomosSeleccionados.map(function(tomo, indice) {
-    var numeroVisible = usarManual ? inicio + indice : tomo.numero;
-    return {
-      tomo: tomo,
-      numeroProyectado: tomo.numero,
-      numeroVisible: numeroVisible,
-      totalVisible: totalVisible,
-      numeroTexto: formatearNumeroMinimo_(numeroVisible, ancho),
-      totalTexto: formatearNumeroMinimo_(totalVisible, ancho),
-      ancho: ancho,
-      manual: usarManual
-    };
-  });
-}
-
-function etiquetaNumeracionTomo_(numeracion) {
-  return numeracion.numeroTexto + '/' + numeracion.totalTexto;
-}
-
-var CLAVE_PROYECCION_TOMOS_ = 'ULTIMA_PROYECCION_TOMOS_V2';
-var TAMANO_FRAGMENTO_PROYECCION_ = 5000;
-
-function guardarJsonFragmentadoTomos_(claveBase, objeto) {
-  var propiedades = PropertiesService.getDocumentProperties();
-  var metaAnterior = parsearJsonSeguro(propiedades.getProperty(claveBase + '_META'));
-  if (metaAnterior && metaAnterior.fragmentos) {
-    for (var anterior = 0; anterior < Number(metaAnterior.fragmentos); anterior++) {
-      propiedades.deleteProperty(claveBase + '_PARTE_' + anterior);
-    }
-  }
-  var contenido = JSON.stringify(objeto);
-  var fragmentos = Math.max(1, Math.ceil(contenido.length / TAMANO_FRAGMENTO_PROYECCION_));
-  var valores = {};
-  for (var i = 0; i < fragmentos; i++) {
-    valores[claveBase + '_PARTE_' + i] = contenido.substring(i * TAMANO_FRAGMENTO_PROYECCION_, (i + 1) * TAMANO_FRAGMENTO_PROYECCION_);
-  }
-  valores[claveBase + '_META'] = JSON.stringify({ fragmentos: fragmentos, longitud: contenido.length, version: 2, actualizado: Date.now() });
-  propiedades.setProperties(valores, false);
-}
-
-function leerJsonFragmentadoTomos_(claveBase) {
-  var propiedades = PropertiesService.getDocumentProperties();
-  var meta = parsearJsonSeguro(propiedades.getProperty(claveBase + '_META'));
-  if (!meta || !meta.fragmentos) return null;
-  var partes = [];
-  for (var i = 0; i < Number(meta.fragmentos); i++) {
-    var parte = propiedades.getProperty(claveBase + '_PARTE_' + i);
-    if (parte === null || parte === undefined) return null;
-    partes.push(parte);
-  }
-  var contenido = partes.join('');
-  if (meta.longitud !== undefined && Number(meta.longitud) !== contenido.length) return null;
-  return parsearJsonSeguro(contenido);
-}
-
-function crearResumenProyeccionTomos_(seleccionados, calculo) {
-  return {
-    version: 2,
-    created: Date.now(),
-    totalTomos: calculo.tomos.length,
-    seleccion: (seleccionados || []).map(function(item) {
-      return { id: item && item.id ? String(item.id) : '', name: item && item.name ? String(item.name) : '' };
-    }).filter(function(item) { return Boolean(item.id); }),
-    tomos: calculo.tomos.map(function(tomo) {
-      return {
-        numero: tomo.numero,
-        totalContenido: tomo.totalContenido,
-        totalFisicas: tomo.totalFisicas,
-        totalFoleo: tomo.totalFoleo,
-        excedeLimite: Boolean(tomo.excedeLimite),
-        archivos: tomo.archivos.map(function(archivo) {
-          return {
-            id: archivo.id,
-            nombreOriginal: archivo.nombreOriginal,
-            esNumerado: Boolean(archivo.esNumerado),
-            segmentos: archivo.segmentos || [],
-            numAnexoStr: archivo.numAnexoStr || '',
-            descAnexo: archivo.descAnexo || '',
-            paginasFisicas: Number(archivo.paginasFisicas) || 0,
-            paginasFoleo: Number(archivo.paginasFoleo) || 0,
-            tamano: Number(archivo.tamano) || 0,
-            actualizadoMs: Number(archivo.actualizadoMs) || 0,
-            carpetaOrigen: archivo.carpetaOrigen || '',
-            carpetaOrigenId: archivo.carpetaOrigenId || '',
-            ruta: archivo.ruta || '',
-            startFoleo: Number(archivo.startFoleo) || 0,
-            endFoleo: Number(archivo.endFoleo) || 0
-          };
-        })
-      };
-    }),
-    omitidos: calculo.omitidos || []
-  };
-}
-
-function guardarUltimaProyeccion_(seleccionados, calculo, pdfsManual) {
-  var resumen = crearResumenProyeccionTomos_(seleccionados, calculo);
-  resumen.seleccionManual = (pdfsManual || []).map(function(item) {
-    return { id: item && item.id ? String(item.id) : '' };
-  }).filter(function(item) { return Boolean(item.id); });
-  guardarJsonFragmentadoTomos_(CLAVE_PROYECCION_TOMOS_, resumen);
-  PropertiesService.getDocumentProperties().setProperty('ULTIMA_PROYECCION_TOMOS', JSON.stringify({
-    totalTomos: resumen.totalTomos,
-    seleccionIds: resumen.seleccion.map(function(item) { return item.id; }).sort(),
-    created: resumen.created,
-    version: resumen.version
-  }));
-}
-
-function cargarUltimaProyeccionTomos_() {
-  var proyeccion = leerJsonFragmentadoTomos_(CLAVE_PROYECCION_TOMOS_);
-  if (!proyeccion || Number(proyeccion.version) !== 2 || !Array.isArray(proyeccion.tomos) || !proyeccion.tomos.length || !Array.isArray(proyeccion.seleccion)) {
-    return null;
-  }
-  proyeccion.totalTomos = Number(proyeccion.totalTomos || proyeccion.tomos.length);
-  return proyeccion;
-}
-
-function validarUltimaProyeccionVigente_(proyeccion) {
-  if (!Boolean(obtenerValorConfigSistema_('VALIDAR_PROYECCION_TOMOS', true))) return;
-  var cache = CacheService.getDocumentCache();
-  var cacheKey = 'PROYECCION_OK_' + String(proyeccion.created || '0');
-  if (cache.get(cacheKey) === '1') return;
-  var cambios = [];
-  var limiteMostrar = Number(obtenerValorConfigSistema_('MAX_CAMBIOS_PROYECCION_MOSTRAR', 8));
-  (proyeccion.tomos || []).some(function(tomo) {
-    return (tomo.archivos || []).some(function(archivo) {
-      try {
-        var file = DriveApp.getFileById(archivo.id);
-        var cambiado = file.isTrashed() || file.getName() !== archivo.nombreOriginal || Number(file.getSize()) !== Number(archivo.tamano || 0) || file.getLastUpdated().getTime() !== Number(archivo.actualizadoMs || 0);
-        if (cambiado) cambios.push(archivo.nombreOriginal || archivo.id);
-      } catch (error) {
-        cambios.push((archivo.nombreOriginal || archivo.id) + ' (inaccesible)');
-      }
-      return cambios.length >= limiteMostrar;
-    });
-  });
-  if (cambios.length) {
-    throw new Error('La última proyección está desactualizada porque cambiaron compilados: ' + cambios.join(' | ') + '. Selecciona todas las carpetas y pulsa nuevamente “1. Proyectar”.');
-  }
-  cache.put(cacheKey, '1', 300);
-}
-
-function obtenerTomosDesdeUltimaProyeccion_(seleccionados, config) {
-  var proyeccion = cargarUltimaProyeccionTomos_();
-  if (!proyeccion) throw new Error('No existe una proyección completa guardada. Selecciona todas las carpetas que formarán el expediente y pulsa primero “1. Proyectar”.');
-  validarUltimaProyeccionVigente_(proyeccion);
-  var pdfsManualActual = (config && Array.isArray(config.pdfsManual)) ? config.pdfsManual : [];
-  var haySeleccionManual = pdfsManualActual.length > 0;
-  var seleccionActual = {};
-  (seleccionados || []).forEach(function(item) { if (item && item.id) seleccionActual[String(item.id)] = true; });
-  var idsProyectados = {};
-  proyeccion.seleccion.forEach(function(item) { if (item && item.id) idsProyectados[String(item.id)] = true; });
-  var fueraDeProyeccion = Object.keys(seleccionActual).filter(function(id) { return !idsProyectados[id]; });
-  if (fueraDeProyeccion.length) throw new Error('La selección actual contiene carpetas que no pertenecen a la última proyección. Ejecuta nuevamente “1. Proyectar” con todas las carpetas.');
-  if (haySeleccionManual) {
-    var idsManualProyectados = {};
-    (proyeccion.seleccionManual || []).forEach(function(item) { if (item && item.id) idsManualProyectados[String(item.id)] = true; });
-    var manualFueraDeProyeccion = pdfsManualActual.filter(function(item) { return item && item.id && !idsManualProyectados[String(item.id)]; });
-    if (manualFueraDeProyeccion.length) throw new Error('La selección manual actual contiene PDF que no formaban parte de la última proyección. Ejecuta nuevamente “1. Proyectar” con los mismos PDF marcados.');
-  }
-  var relacionados = proyeccion.tomos.filter(function(tomo) {
-    return (tomo.archivos || []).some(function(archivo) {
-      if (seleccionActual[String(archivo.carpetaOrigenId || '')]) return true;
-      if (haySeleccionManual && archivo.carpetaOrigenId === ID_SELECCION_MANUAL_TOMOS) return true;
-      return false;
-    });
-  });
-  if (!relacionados.length) throw new Error('Las carpetas o los PDF seleccionados no aparecen en la última proyección. Vuelve a proyectar antes de crear índices o fusionar.');
-  var tomosSeleccionados = seleccionarTomos_(relacionados, config || {});
-  return { tomos: tomosSeleccionados, totalTomos: proyeccion.totalTomos, fechaProyeccion: Number(proyeccion.created) || 0, seleccionProyectada: proyeccion.seleccion };
-}
-
-function herramienta1_Calcular(seleccionados, config) {
-  var sheet = obtenerHojaSegura(CONFIG_SISTEMA.HOJA_TOMOS);
-  var calculo = procesarCalculoMatematico(seleccionados, config);
-  if (!calculo.tomos.length) {
-    var detalleSinConteo = resumenPdfsOmitidos_(calculo.omitidos, 8);
-    throw new Error('No se encontraron PDF con el patrón de páginas en el nombre.' + (detalleSinConteo ? ' Archivos detectados sin conteo: ' + detalleSinConteo + '.' : ''));
-  }
-  guardarUltimaProyeccion_(seleccionados, calculo, config && config.pdfsManual);
-  var numeraciones = resolverNumeracionTomos_(calculo.tomos, calculo.tomos.length, { usarNumeracionManual: false });
-  var omitidosOrdenados = ordenarPdfsOmitidos_(calculo.omitidos);
-  var filas = [];
-  filas.push([new Date(), 'BLOQUE UNIFICADO (' + seleccionados.length + ' carpetas)', '1. PROYECCIÓN', 'Proyección total: ' + calculo.tomos.length + ' tomos', omitidosOrdenados.length ? 'PDF omitidos: ' + omitidosOrdenados.length + ' | Ver detalle debajo' : '']);
-  numeraciones.forEach(function(numeracion) {
-    var tomo = numeracion.tomo;
-    var anexos = [];
-    tomo.archivos.forEach(function(archivo) { if (anexos.indexOf(archivo.carpetaOrigen) === -1) anexos.push(archivo.carpetaOrigen); });
-    filas.push(['', 'TOMO ' + etiquetaNumeracionTomo_(numeracion), tomo.totalFoleo + ' folios / ' + tomo.totalFisicas + ' páginas físicas finales', tomo.archivos.length + ' archivos', 'Contiene: ' + anexos.join(' | ') + (tomo.excedeLimite ? ' | ⚠️ Supera el límite configurado' : '')]);
-  });
-  filas = filas.concat(crearFilasPdfsOmitidos_(omitidosOrdenados));
-  var inicio = Math.max(15, sheet.getLastRow() + 1);
-  sheet.getRange(inicio, 1, filas.length, 5).setValues(filas);
-  var excedidos = calculo.tomos.filter(function(tomo) { return tomo.excedeLimite; }).length;
-  return {
-    status: omitidosOrdenados.length || excedidos ? 'partial' : 'success',
-    tomos: calculo.tomos.length,
-    omitidos: omitidosOrdenados.length,
-    omitidosDetalle: omitidosOrdenados,
-    excedidos: excedidos,
-    mensaje: '✅ Proyección finalizada: ' + calculo.tomos.length + ' tomos. ' +
-      'La numeración automática será ' + formatearNumeroMinimo_(1, Math.max(2, String(calculo.tomos.length).length)) + '/' + formatearNumeroMinimo_(calculo.tomos.length, Math.max(2, String(calculo.tomos.length).length)) +
-      ' hasta ' + formatearNumeroMinimo_(calculo.tomos.length, Math.max(2, String(calculo.tomos.length).length)) + '/' + formatearNumeroMinimo_(calculo.tomos.length, Math.max(2, String(calculo.tomos.length).length)) + '. ' +
-      (omitidosOrdenados.length ? '⚠️ PDF omitidos sin conteo: ' + omitidosOrdenados.length + '. Se registró el nombre, la carpeta, la ruta, el motivo y el enlace en la hoja TOMOS. Archivos: ' + resumenPdfsOmitidos_(omitidosOrdenados, 6) + '. ' : '') +
-      (excedidos ? '⚠️ Tomos que superan el límite por contener un PDF individual muy grande: ' + excedidos + '.' : '')
-  };
-}
-
-function nombreCaratulaTomo_(numeracion) {
-  return 'caratula tomo ' + numeracion.numeroTexto + '.pdf';
-}
-
-function herramienta2_Caratulas(seleccionados, config) {
-  var nombreHoja = CONFIG_SISTEMA.HOJA_TOMOS;
-  var sheet = obtenerHojaSegura(nombreHoja);
-  var idPlantilla = obtenerIdDesdeHoja('C3', nombreHoja);
-  var idDestino = obtenerIdDesdeHoja('C6', nombreHoja);
-  var plantilla = DriveApp.getFileById(idPlantilla);
-  if (plantilla.getMimeType() !== MimeType.GOOGLE_DOCS) throw new Error('La plantilla de índices en TOMOS!C3 debe ser un archivo de Google Docs.');
-  var operacion = obtenerTomosDesdeUltimaProyeccion_(seleccionados, config || {});
-  var tomos = operacion.tomos;
-  var numeraciones = resolverNumeracionTomos_(tomos, operacion.totalTomos, config || {});
-  var carpetaBase = DriveApp.getFolderById(idDestino);
-  var carpetaSalida = getOrCreateFolder(carpetaBase, String(obtenerValorConfigSistema_('CARPETA_INDICES_TOMOS', 'ÍNDICES DE TOMOS')), {});
-  var creadas = 0, reemplazadas = 0, errores = [], logs = [];
-  var archivosGenerados = []; // 👈 NUEVO
-  numeraciones.forEach(function(numeracion) {
-    var tomo = numeracion.tomo;
-    var nombrePdf = nombreCaratulaTomo_(numeracion);
-    var copia = plantilla.makeCopy('TEMP ÍNDICE TOMO ' + numeracion.numeroTexto + ' - ' + Utilities.getUuid().slice(0, 8), carpetaSalida);
-    try {
-      rellenarIndiceTomo_(copia.getId(), tomo, numeracion);
-      var existentesAntes = listarArchivosExactos_(carpetaSalida, nombrePdf).length;
-      var blob = exportarGoogleWorkspaceAPdf(copia.getId()).setName(nombrePdf);
-      var pdf = crearArchivoSinDuplicados_(carpetaSalida, blob, nombrePdf);
-      guardarCaratulaTomoReciente_(numeracion, pdf.getId(), carpetaSalida.getId());
-      creadas++;
-      if (existentesAntes) reemplazadas++;
-      archivosGenerados.push({ // 👈 NUEVO
-        origen: 'ÍNDICE TOMO ' + numeracion.numeroTexto,
-        id: pdf.getId(),
-        url: pdf.getUrl(),
-        name: nombrePdf
-      });
-      logs.push([new Date(), 'Google Apps Script - Índices', nombrePdf, existentesAntes ? '♻️ Índice creado y versión anterior reemplazada' : '✅ Índice de tomo creado', pdf.getUrl(), pdf.getId()]);
-    } catch (error) {
-      errores.push('Tomo proyectado ' + tomo.numero + ' (' + etiquetaNumeracionTomo_(numeracion) + '): ' + error.message);
-      logs.push([new Date(), 'Google Apps Script - Índices', nombrePdf, '❌ Error al generar índice: ' + error.message, '', '']);
-    } finally {
-      try { copia.setTrashed(true); } catch (errorTrash) {}
-    }
-  });
-  var registrosAgregados = escribirLogsIndicesTomos_(sheet, logs);
-  return {
-    status: errores.length ? (creadas ? 'partial' : 'error') : 'success',
-    creadas: creadas,
-    reemplazadas: reemplazadas,
-    errores: errores.length,
-    detalleErrores: errores,
-    carpetaId: carpetaSalida.getId(),
-    registrosAgregados: registrosAgregados,
-    archivosGenerados: archivosGenerados, // 👈 NUEVO
-    mensaje: (errores.length ? '⚠️ Índices generados con observaciones. ' : '✅ Índices generados. ') +
-      'Creados: ' + creadas + ' | Total de la proyección: ' + operacion.totalTomos + ' | Versiones anteriores reemplazadas: ' + reemplazadas + ' | Errores: ' + errores.length + ' | Actividades registradas: ' + registrosAgregados
-  };
-}
-
-function escribirLogsIndicesTomos_(sheet, filas) {
-  if (!sheet || !Array.isArray(filas) || !filas.length) return 0;
-  try {
-    var inicio = Math.max(15, sheet.getLastRow() + 1);
-    sheet.getRange(inicio, 1, filas.length, 6).setValues(filas);
-    return filas.length;
-  } catch (error) {
-    console.warn('No se pudieron registrar las actividades de índices: ' + error.message);
-    return 0;
-  }
-}
-
-function rellenarIndiceTomo_(documentId, tomo, numeracion) {
-  var doc = DocumentApp.openById(documentId);
-  var body = doc.getBody();
-  body.setMarginBottom(15);
-  body.setMarginTop(20);
-  var reemplazos = { '\\bAA\\b': numeracion.numeroTexto, '\\bBB\\b': numeracion.totalTexto, '\\bCCCC\\b': formatearNumeroMinimo_(tomo.totalFoleo, 4) };
-  [body, doc.getHeader(), doc.getFooter()].filter(Boolean).forEach(function(seccion) {
-    Object.keys(reemplazos).forEach(function(patron) { seccion.replaceText(patron, reemplazos[patron]); });
-  });
-  var targetTable = null;
-  var templateRowIndex = -1;
-  var tables = body.getTables();
-  for (var i = 0; i < tables.length && !targetTable; i++) {
-    for (var r = 0; r < tables[i].getNumRows(); r++) {
-      var text = tables[i].getRow(r).getText();
-      if (/XX|YYYY|0000-0000/.test(text)) { targetTable = tables[i]; templateRowIndex = r; break; }
-    }
-  }
-  if (!targetTable || templateRowIndex < 0) { doc.saveAndClose(); throw new Error('No se encontró la fila modelo con XX, YYYY y 0000-0000.'); }
-  var grupos = consolidarAnexosTomo_(tomo.archivos);
-  var templateRow = targetTable.getRow(templateRowIndex).copy();
-  for (var g = 0; g < grupos.length; g++) {
-    var grupo = grupos[g];
-    var nuevaFila = targetTable.insertTableRow(templateRowIndex + g, templateRow.copy());
-    var inicio = formatearNumeroMinimo_(grupo.startFoleo, 4);
-    var fin = formatearNumeroMinimo_(grupo.endFoleo, 4);
-    if (!grupo.numAnexoStr) {
-      nuevaFila.replaceText('ANEXO\\s+XX', '');
-      nuevaFila.replaceText('Anexo\\s+XX', '');
-      nuevaFila.replaceText('anexo\\s+XX', '');
-      nuevaFila.replaceText('\\bXX\\b', '');
-    } else {
-      nuevaFila.replaceText('\\bXX\\b', grupo.numAnexoStr);
-    }
-    nuevaFila.replaceText('\\bYYYY\\b', grupo.descAnexo || '');
-    nuevaFila.replaceText('0000-0000', inicio + '-' + fin);
-  }
-  targetTable.removeRow(templateRowIndex + grupos.length);
-  limpiarParrafosVaciosPosteriores_(body, targetTable);
-  doc.saveAndClose();
-}
-
-function consolidarAnexosTomo_(archivos) {
-  var grupos = [];
-  archivos.forEach(function(archivo) {
-    var clave = archivo.numAnexoStr + '|' + archivo.descAnexo;
-    var ultimo = grupos.length ? grupos[grupos.length - 1] : null;
-    if (ultimo && ultimo.clave === clave) ultimo.endFoleo = archivo.endFoleo;
-    else grupos.push({ clave: clave, numAnexoStr: archivo.numAnexoStr, descAnexo: archivo.descAnexo, startFoleo: archivo.startFoleo, endFoleo: archivo.endFoleo });
-  });
-  return grupos;
-}
-
-function limpiarParrafosVaciosPosteriores_(body, tabla) {
-  var indiceTabla = body.getChildIndex(tabla);
-  for (var i = body.getNumChildren() - 1; i > indiceTabla; i--) {
-    var child = body.getChild(i);
-    if (child.getType() !== DocumentApp.ElementType.PARAGRAPH) break;
-    var p = child.asParagraph();
-    if (p.getText().trim()) break;
-    if (body.getNumChildren() > 1) { try { child.removeFromParent(); } catch (error) { p.clear(); } } else p.clear();
-  }
-}
-
-function guardarCaratulaTomoReciente_(numeracion, fileId, folderId) {
-  var data = { fileId: fileId, folderId: folderId, numeroProyectado: numeracion.numeroProyectado, numeroVisible: numeracion.numeroVisible, totalVisible: numeracion.totalVisible, numeroTexto: numeracion.numeroTexto, totalTexto: numeracion.totalTexto, created: Date.now() };
-  PropertiesService.getDocumentProperties().setProperty('CARATULA_TOMO_PROYECTADO_' + numeracion.numeroProyectado, JSON.stringify(data));
-}
-
-function carpetaEstaDentroDe_(folderId, rootId) {
-  if (!folderId || !rootId) return false;
-  if (folderId === rootId) return true;
-  var visitados = {};
-  var pendientes = [folderId];
-  while (pendientes.length) {
-    var actualId = pendientes.shift();
-    if (visitados[actualId]) continue;
-    visitados[actualId] = true;
-    try {
-      var carpeta = DriveApp.getFolderById(actualId);
-      var padres = carpeta.getParents();
-      while (padres.hasNext()) {
-        var padre = padres.next();
-        var padreId = padre.getId();
-        if (padreId === rootId) return true;
-        if (!visitados[padreId]) pendientes.push(padreId);
-      }
-    } catch (error) {}
-  }
-  return false;
-}
-
-function buscarCaratulaTomo_(numeracion, idCarpetaBase) {
-  var prop = PropertiesService.getDocumentProperties().getProperty('CARATULA_TOMO_PROYECTADO_' + numeracion.numeroProyectado);
-  if (prop) {
-    var data = parsearJsonSeguro(prop);
-    if (data && data.fileId && data.folderId && Number(data.numeroVisible) === Number(numeracion.numeroVisible) && Number(data.totalVisible) === Number(numeracion.totalVisible) && carpetaEstaDentroDe_(data.folderId, idCarpetaBase)) {
-      try {
-        var guardada = DriveApp.getFileById(data.fileId);
-        if (!guardada.isTrashed()) return guardada;
-      } catch (errorGuardada) {}
-    }
-  }
-  var nombre = nombreCaratulaTomo_(numeracion);
-  var candidatas = [];
-  function recorrer(folder) {
-    var files = folder.getFilesByName(nombre);
-    while (files.hasNext()) { var file = files.next(); if (!file.isTrashed()) candidatas.push(file); }
-    var subs = folder.getFolders();
-    while (subs.hasNext()) recorrer(subs.next());
-  }
-  recorrer(DriveApp.getFolderById(idCarpetaBase));
-  candidatas.sort(function(a, b) { return b.getDateCreated().getTime() - a.getDateCreated().getTime(); });
-  return candidatas.length ? candidatas[0] : null;
-}
-
-function buscarTomoFinalReciente_(carpeta, nombreArchivo, fechaInicio) {
-  var candidatos = [];
-  var archivos = carpeta.getFilesByName(nombreArchivo);
-  var minimo = fechaInicio ? fechaInicio.getTime() - 5000 : 0;
-  while (archivos.hasNext()) {
-    var file = archivos.next();
-    if (!file.isTrashed() && file.getDateCreated().getTime() >= minimo) candidatos.push(file);
-  }
-  candidatos.sort(function(a, b) { return b.getDateCreated().getTime() - a.getDateCreated().getTime(); });
-  if (!candidatos.length) return null;
-  var encontrado = candidatos[0];
-  return { id: encontrado.getId(), url: encontrado.getUrl(), final_name: encontrado.getName(), paginas: 0 };
-}
-
-function recuperarTomoTrasError_(carpeta, nombreArchivo, fechaInicio) {
-  var intentos = 3;
-  for (var i = 0; i < intentos; i++) {
-    var encontrado = buscarTomoFinalReciente_(carpeta, nombreArchivo, fechaInicio);
-    if (encontrado) return encontrado;
-    if (i < intentos - 1) Utilities.sleep(2000);
+function buscarCaratulaPorNombreExactoContiene_(coversCache, patron) {
+  var patronNorm = normalizarTexto(patron);
+  for (var i = 0; i < coversCache.length; i++) {
+    if (coversCache[i].nameNorm.indexOf(patronNorm) !== -1) return coversCache[i];
   }
   return null;
 }
 
-function obtenerBaseServidorTomos_(endpoint) {
-  return String(endpoint || '').trim().replace(/\/tomos\/?$/i, '').replace(/\/+$/, '');
+function buscarCaratulaPorContenidoNorm_(coversCache, subcadena) {
+  return buscarCaratulaPorNombreExactoContiene_(coversCache, subcadena);
 }
 
-function construirDetalleHttpTomos_(code, data, text) {
-  var detalle = '';
-  if (data && data.detail) detalle = String(data.detail);
-  else if (data && data.message) detalle = String(data.message);
-  else if (text) detalle = String(text).substring(0, 300);
-  else detalle = 'Respuesta vacía';
-  return 'HTTP ' + code + ': ' + detalle;
-}
-
-function registrarResultadoTomo_(data, ref, carpetaSalida, logs, recuperado, archivosGenerados) {
-  var id = data && data.id ? String(data.id) : '';
-  var nombre = data && data.final_name ? String(data.final_name) : ref.nombreSalida;
-  var paginas = Number(data && data.paginas) || 0;
-  var esperadas = Number(ref.paginasEsperadas) || 0;
-  if (esperadas && paginas && paginas !== esperadas) {
-    if (id) enviarArchivosPapeleraPorId_([id], []);
-    logs.push([new Date(), 'TOMO ' + etiquetaNumeracionTomo_(ref.numeracion), 'Error de integridad', '❌ Se esperaban ' + esperadas + ' páginas, pero Colab generó ' + paginas + '.', '', '']);
-    ref.ultimoError = 'Cantidad de páginas distinta a la proyección.';
-    return false;
+function obtenerCaratulaEspecial_(nombreArchivo, coversCache) {
+  var texto = simplificar(nombreArchivo);
+  if (texto.indexOf('reniec') !== -1 || texto.indexOf('dni') !== -1) {
+    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'reniec');
   }
-  if (!id && !recuperado) return false;
-  if (id) eliminarDuplicadosNombreExcepto_(carpetaSalida, nombre, id);
-  var mensaje = recuperado ? '✅ Tomo encontrado en Drive después de una interrupción de conexión' : '✅ Tomo ensamblado por Colab';
-  if (data && data.status === 'partial') mensaje += ' | ⚠️ Algunos archivos no pudieron incorporarse';
-  logs.push([new Date(), 'TOMO ' + etiquetaNumeracionTomo_(ref.numeracion), nombre, mensaje + ' (' + (paginas || esperadas || ref.tomo.totalFisicas) + ' páginas físicas)', data && data.url ? data.url : '', id]);
+  if (texto.indexOf('ruc') !== -1) {
+    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'ruc');
+  }
+  if (texto.indexOf('declaracion') !== -1 || texto.indexOf('jurada') !== -1) {
+    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'declaracion jurada');
+  }
+  if (texto.indexOf('partida') !== -1 || texto.indexOf('registral') !== -1) {
+    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'partida registral');
+  }
+  if (texto.indexOf('constancia') !== -1 || texto.indexOf('posesion') !== -1) {
+    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'constancia de posesion');
+  }
+  return null;
+}
 
-  if (archivosGenerados && id) { // 👈 NUEVO
-    archivosGenerados.push({
-      origen: 'TOMO ' + etiquetaNumeracionTomo_(ref.numeracion),
-      id: id,
-      url: data && data.url ? data.url : '',
-      name: nombre
+function extraerTodasLasCaratulas_(carpeta) {
+  var lista = [];
+
+  function recorrer(folder) {
+    var archivos = folder.getFilesByType(MimeType.PDF);
+    while (archivos.hasNext()) {
+      var file = archivos.next();
+      lista.push({ id: file.getId(), name: file.getName(), nameNorm: normalizarTexto(file.getName()) });
+    }
+
+    var subs = folder.getFolders();
+    while (subs.hasNext()) recorrer(subs.next());
+  }
+
+  recorrer(carpeta);
+  lista.sort(function(a, b) {
+    return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
+  });
+  return lista;
+}
+
+function encontrarCaratulaPorCarpeta_(nombreCarpeta, listaCaratulas, permitirParcial) {
+  var nombreNorm = normalizarTexto(limpiarNombrePDF(nombreCarpeta));
+  if (!nombreNorm) return null;
+
+  for (var i = 0; i < listaCaratulas.length; i++) {
+    var coverNorm = normalizarTexto(limpiarNombrePDF(listaCaratulas[i].name));
+    if (coverNorm === nombreNorm) return listaCaratulas[i];
+  }
+
+  if (permitirParcial) {
+    for (var j = 0; j < listaCaratulas.length; j++) {
+      var parcialNorm = normalizarTexto(limpiarNombrePDF(listaCaratulas[j].name));
+      if (parcialNorm && (parcialNorm.indexOf(nombreNorm) !== -1 || nombreNorm.indexOf(parcialNorm) !== -1)) {
+        return listaCaratulas[j];
+      }
+    }
+  }
+
+  return null;
+}
+
+function obtenerDatosParaCompilar(seleccionados) {
+  var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
+  var idC2 = obtenerIdDesdeHoja('C2', nombreHoja);
+  var idC4 = obtenerIdDesdeHoja('C4', nombreHoja);
+  var idC6 = obtenerIdDesdeHoja('C6', nombreHoja);
+  var filtrados = filtrarSeleccionadosMasEspecificos(seleccionados);
+
+  if (!filtrados.length) throw new Error('No quedaron carpetas válidas después de eliminar selecciones duplicadas padre/hijo.');
+
+  filtrados.sort(function(a, b) {
+    return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
+  });
+
+  var caratulas = extraerTodasLasCaratulas_(DriveApp.getFolderById(idC4));
+  var compilaciones = [];
+  var caratulasMacroUsadas = {};
+
+  for (var i = 0; i < filtrados.length; i++) {
+    var sel = filtrados[i];
+    var origen = DriveApp.getFolderById(sel.id);
+    var ruta = obtenerRutaDesdeOrigen(sel.id, idC2);
+    var primerOrden = determinarPrimerOrden_(sel, ruta, idC2);
+    var grupo = determinarGrupoAnexo_(primerOrden);
+    var secuencia = [];
+    var alertas = [];
+
+    // En los Anexos 11 y 13, la carátula general del anexo se incorpora
+    // una sola vez y únicamente en el primer código real del grupo.
+    if (
+      grupo &&
+      !caratulasMacroUsadas[grupo] &&
+      esPrimerCodigoRealAnexoEspecial_(sel.id, idC2, grupo)
+    ) {
+      var macro = buscarCaratulaMacroAnexo_(grupo, primerOrden, caratulas);
+
+      if (macro) {
+        secuencia.push({
+          id: macro.id,
+          name: macro.name,
+          type: 'Carátula General del ' + grupo
+        });
+        caratulasMacroUsadas[grupo] = true;
+      } else {
+        alertas.push(
+          '⚠️ No se encontró la carátula general de ' + grupo +
+          ' para incorporarla al primer código'
+        );
+      }
+    }
+
+    var principal = encontrarCaratulaPorCarpeta_(sel.name, caratulas, false);
+    if (principal) {
+      secuencia.push({
+        id: principal.id,
+        name: principal.name,
+        type: 'Carátula Principal'
+      });
+    }
+
+    if (grupo === 'ANEXO 11') {
+      var resultado11 = construirSecuenciaAnexo11_(origen, caratulas);
+      secuencia = secuencia.concat(resultado11.archivos);
+      if (resultado11.alerta) alertas.push(resultado11.alerta);
+    } else if (grupo === 'ANEXO 13') {
+      secuencia = secuencia.concat(
+        rastrearAnexo13_(origen, true, false, caratulas)
+      );
+    } else {
+      secuencia = secuencia.concat(rastrearGenerico_(origen, true, caratulas));
+    }
+
+    secuencia = eliminarDuplicadosPorId_(secuencia);
+    compilaciones.push({
+      nombreCarpeta: sel.name,
+      archivos: secuencia,
+      alerta: alertas.join(' | '),
+      folderPrimerOrden: primerOrden
     });
   }
 
-  return true;
+  return { idC6: idC6, compilaciones: compilaciones };
 }
 
-function herramienta3_GenerarTomos(seleccionados, config) {
-  var nombreHoja = CONFIG_SISTEMA.HOJA_TOMOS;
-  var sheet = obtenerHojaSegura(nombreHoja);
-  var idDestinoTomos = obtenerIdDesdeHoja('C4', nombreHoja);
-  var idDestinoCaratulas = obtenerIdDesdeHoja('C6', nombreHoja);
-  var endpoint = normalizarUrlEndpoint(sheet.getRange('C8').getDisplayValue(), 'tomos');
-  var baseServidor = obtenerBaseServidorTomos_(endpoint);
-  var operacion = obtenerTomosDesdeUltimaProyeccion_(seleccionados, config || {});
-  var tomos = operacion.tomos;
-  var numeraciones = resolverNumeracionTomos_(tomos, operacion.totalTomos, config || {});
-  var permitirSinCaratula = Boolean(config && config.permitirSinCaratula);
-  var estricto = Boolean(obtenerValorConfigSistema_('MODO_ESTRICTO_TOMOS', true));
-  var preparados = [];
-  var omitidos = 0;
-  numeraciones.forEach(function(numeracion) {
-    var caratula = buscarCaratulaTomo_(numeracion, idDestinoCaratulas);
-    if (!caratula && !permitirSinCaratula) { omitidos++; return; }
-    preparados.push({ tomo: numeracion.tomo, numeracion: numeracion, caratula: caratula });
+function determinarPrimerOrden_(sel, ruta, idC2) {
+  if (ruta.length) return sanitizarNombreArchivo(ruta[0].toUpperCase());
+
+  var nombreSeleccion = String(sel.name || '').toUpperCase().trim();
+  if (nombreSeleccion.indexOf('ANEXO') !== -1) return sanitizarNombreArchivo(nombreSeleccion);
+
+  return sanitizarNombreArchivo(DriveApp.getFolderById(idC2).getName().toUpperCase()) || 'COMPILADOS';
+}
+
+function determinarGrupoAnexo_(primerOrden) {
+  var texto = normalizarTexto(primerOrden);
+  if (texto.indexOf('anexo 11') !== -1) return 'ANEXO 11';
+  if (texto.indexOf('anexo 13') !== -1) return 'ANEXO 13';
+  return '';
+}
+
+
+function buscarCaratulaMacroAnexo_(grupo, primerOrden, caratulas) {
+  var exacta = encontrarCaratulaPorCarpeta_(primerOrden, caratulas, false);
+  if (exacta) return exacta;
+
+  var grupoNorm = normalizarTexto(grupo);
+  var candidatas = caratulas.filter(function(caratula) {
+    var nombre = normalizarTexto(limpiarNombrePDF(caratula.name));
+    return (
+      nombre.indexOf(grupoNorm) === 0 &&
+      nombre.indexOf('compilado') === -1 &&
+      nombre.indexOf('caratula tomo') === -1
+    );
   });
-  if (!preparados.length) {
-    return { status: 'error', exitosos: 0, pendientes: 0, omitidos: omitidos, errores: 0, archivosGenerados: [], mensaje: 'No se envió ningún tomo. Faltan las carátulas requeridas en TOMOS!C6.' };
+
+  candidatas.sort(function(a, b) {
+    var aNorm = normalizarTexto(limpiarNombrePDF(a.name));
+    var bNorm = normalizarTexto(limpiarNombrePDF(b.name));
+
+    // Se prioriza el nombre más descriptivo, no un título abreviado.
+    if (aNorm.length !== bNorm.length) return bNorm.length - aNorm.length;
+    return a.name.localeCompare(b.name, 'es', {
+      numeric: true,
+      sensitivity: 'base'
+    });
+  });
+
+  return candidatas.length ? candidatas[0] : null;
+}
+
+function esPrimerCodigoRealAnexoEspecial_(folderId, idOrigen, grupo) {
+  try {
+    var seleccionado = DriveApp.getFolderById(folderId);
+    var actual = seleccionado;
+    var hijoDirecto = seleccionado;
+    var carpetaAnexo = null;
+    var seguridad = 0;
+
+    while (seguridad++ < 100) {
+      var padres = actual.getParents();
+      if (!padres.hasNext()) break;
+
+      var padre = padres.next();
+      if (padre.getId() === idOrigen) {
+        carpetaAnexo = actual;
+        break;
+      }
+
+      hijoDirecto = actual;
+      actual = padre;
+    }
+
+    if (!carpetaAnexo || determinarGrupoAnexo_(carpetaAnexo.getName()) !== grupo) {
+      return false;
+    }
+
+    // Si se seleccionó la propia carpeta del anexo, la carátula general ya
+    // será su carátula principal y no debe insertarse nuevamente.
+    if (seleccionado.getId() === carpetaAnexo.getId()) return false;
+
+    var hijos = [];
+    var iterator = carpetaAnexo.getFolders();
+
+    while (iterator.hasNext()) {
+      var hijo = iterator.next();
+      var nombreNorm = normalizarTexto(hijo.getName());
+
+      if (
+        nombreNorm.indexOf('caratula') !== -1 ||
+        nombreNorm.indexOf('no borrar') !== -1
+      ) {
+        continue;
+      }
+
+      hijos.push(hijo);
+    }
+
+    hijos.sort(function(a, b) {
+      return a.getName().localeCompare(b.getName(), 'es', {
+        numeric: true,
+        sensitivity: 'base'
+      });
+    });
+
+    if (!hijos.length) return false;
+
+    var hijosNumerados = hijos.filter(function(hijo) {
+      return /^(?:codigo\s*)?0*\d+(?:\.\d+)*\b/i.test(hijo.getName().trim());
+    });
+
+    var primerHijo = hijosNumerados.length ? hijosNumerados[0] : hijos[0];
+    return primerHijo.getId() === hijoDirecto.getId();
+  } catch (error) {
+    console.warn(
+      'No se pudo determinar el primer código de ' + grupo + ': ' + error.message
+    );
+    return false;
   }
-  var carpetaBase = DriveApp.getFolderById(idDestinoTomos);
-  var carpetaSalida = getOrCreateFolder(carpetaBase, String(obtenerValorConfigSistema_('CARPETA_TOMOS_FINALES', 'TOMOS FINALES')), {});
+}
+
+function construirSecuenciaAnexo11_(origen, caratulas) {
+  var encontrados = [];
+  var existeCarpetaCBC = false;
+
+  function recorrer(folder, contexto) {
+    var nombre = normalizarTexto(folder.getName());
+    var nuevoContexto = {
+      cbc: contexto.cbc || nombre.indexOf('cbc') !== -1 || nombre.indexOf('certificado') !== -1 || nombre.indexOf('catastral') !== -1,
+      informe: contexto.informe || nombre.indexOf('informe') !== -1
+    };
+
+    if (nuevoContexto.cbc) existeCarpetaCBC = true;
+
+    var files = folder.getFilesByType(MimeType.PDF);
+    while (files.hasNext()) {
+      encontrados.push({ file: files.next(), contexto: nuevoContexto });
+    }
+
+    var subs = folder.getFolders();
+    while (subs.hasNext()) recorrer(subs.next(), nuevoContexto);
+  }
+
+  recorrer(origen, { cbc: false, informe: false });
+
+  var bloques = { b1: [], b2: [], b3: [], b4: [], b5: [] };
+
+  encontrados.forEach(function(item) {
+    var nombre = simplificar(item.file.getName());
+    if (nombre.indexOf('diagnosticotecnicolegal') !== -1 || nombre.indexOf('fichadediagnostico') !== -1) {
+      bloques.b1.push(item.file);
+    } else if (nombre.indexOf('plandesaneamiento') !== -1) {
+      bloques.b2.push(item.file);
+    } else if (item.contexto.cbc || nombre.indexOf('certificadodebusqueda') !== -1) {
+      bloques.b4.push(item.file);
+    } else if (item.contexto.informe || nombre.indexOf('informetecnico') !== -1) {
+      bloques.b5.push(item.file);
+    } else {
+      bloques.b3.push(item.file);
+    }
+  });
+
+  ordenarFiles_(bloques.b1);
+  ordenarFiles_(bloques.b2);
+  ordenarFiles_(bloques.b5);
+
+  var planosNormales = [];
+  var planosPP = [];
+  bloques.b3.forEach(function(file) {
+    var sinNumero = simplificar(file.getName()).replace(/^\d+/, '');
+    (sinNumero.indexOf('pp') === 0 ? planosPP : planosNormales).push(file);
+  });
+  ordenarFiles_(planosNormales);
+  ordenarFiles_(planosPP);
+  bloques.b3 = planosNormales.concat(planosPP);
+
+  bloques.b4.sort(function(a, b) {
+    var aGeneral = normalizarTexto(a.getName()).indexOf('general') !== -1;
+    var bGeneral = normalizarTexto(b.getName()).indexOf('general') !== -1;
+    if (aGeneral !== bGeneral) return aGeneral ? -1 : 1;
+    return a.getName().localeCompare(b.getName(), 'es', { numeric: true, sensitivity: 'base' });
+  });
+
+  var secuencia = [];
+  agregarBloque_(secuencia, bloques.b1, caratulas, 'memoria diagnostico');
+  agregarBloque_(secuencia, bloques.b2, caratulas, 'plan de saneamiento');
+  agregarBloque_(secuencia, bloques.b3, caratulas, 'planos diagnostico');
+  agregarBloque_(secuencia, bloques.b4, caratulas, 'certificado de busqueda');
+  agregarBloque_(secuencia, bloques.b5, caratulas, 'informe tecnico');
+
+  return {
+    archivos: secuencia,
+    alerta: existeCarpetaCBC && !bloques.b4.length ? '⚠️ Carpeta de Certificado Catastral vacía' : ''
+  };
+}
+
+function agregarBloque_(secuencia, files, caratulas, patronCaratula) {
+  if (!files.length) return;
+  var cover = buscarCaratulaPorContenidoNorm_(caratulas, patronCaratula);
+  if (cover) secuencia.push({ id: cover.id, name: cover.name, type: 'Carátula Bloque' });
+  files.forEach(function(file) {
+    secuencia.push({ id: file.getId(), name: file.getName(), type: 'Original' });
+  });
+}
+
+function rastrearAnexo13_(folder, isRoot, inSujetoPasivo, caratulas) {
+  var secuencia = [];
+  var nombreNorm = normalizarTexto(folder.getName());
+  var esSujetoPasivo = inSujetoPasivo ||
+    nombreNorm.indexOf('sujeto pasivo') !== -1 ||
+    /^5(?:[.\s]|$)/.test(nombreNorm) ||
+    nombreNorm.indexOf('5.0') !== -1;
+
+  var originales = [];
+  var files = folder.getFilesByType(MimeType.PDF);
+  while (files.hasNext()) originales.push(files.next());
+  ordenarFiles_(originales);
+
+  var especialesUsadas = {};
+  originales.forEach(function(file) {
+    if (esSujetoPasivo) {
+      var especial = obtenerCaratulaEspecial_(file.getName(), caratulas);
+      if (especial && !especialesUsadas[especial.id]) {
+        secuencia.push({ id: especial.id, name: especial.name, type: 'Carátula Interna Específica' });
+        especialesUsadas[especial.id] = true;
+      }
+    }
+    secuencia.push({ id: file.getId(), name: file.getName(), type: 'Original' });
+  });
+
+  var subs = [];
+  var iterator = folder.getFolders();
+  while (iterator.hasNext()) subs.push(iterator.next());
+  subs.sort(function(a, b) {
+    return a.getName().localeCompare(b.getName(), 'es', { numeric: true, sensitivity: 'base' });
+  });
+
+  subs.forEach(function(sub) {
+    secuencia = secuencia.concat(rastrearAnexo13_(sub, false, esSujetoPasivo, caratulas));
+  });
+
+  if (!isRoot && secuencia.length) {
+    var cover = encontrarCaratulaPorCarpeta_(folder.getName(), caratulas, true);
+    if (cover && !especialesUsadas[cover.id]) {
+      secuencia.unshift({ id: cover.id, name: cover.name, type: 'Carátula General de Carpeta' });
+    }
+  }
+
+  return secuencia;
+}
+
+function rastrearGenerico_(folder, isRoot, caratulas) {
+  var secuencia = [];
+  var files = [];
+  var iteratorFiles = folder.getFilesByType(MimeType.PDF);
+  while (iteratorFiles.hasNext()) files.push(iteratorFiles.next());
+  ordenarFiles_(files);
+
+  files.forEach(function(file) {
+    secuencia.push({ id: file.getId(), name: file.getName(), type: 'Original' });
+  });
+
+  var subs = [];
+  var iterator = folder.getFolders();
+  while (iterator.hasNext()) subs.push(iterator.next());
+  subs.sort(function(a, b) {
+    return a.getName().localeCompare(b.getName(), 'es', { numeric: true, sensitivity: 'base' });
+  });
+
+  subs.forEach(function(sub) {
+    secuencia = secuencia.concat(rastrearGenerico_(sub, false, caratulas));
+  });
+
+  if (!isRoot && secuencia.length) {
+    var cover = encontrarCaratulaPorCarpeta_(folder.getName(), caratulas, false);
+    if (cover) secuencia.unshift({ id: cover.id, name: cover.name, type: 'Carátula Carpeta' });
+  }
+
+  return secuencia;
+}
+
+function ordenarFiles_(files) {
+  files.sort(function(a, b) {
+    return a.getName().localeCompare(b.getName(), 'es', { numeric: true, sensitivity: 'base' });
+  });
+}
+
+function eliminarDuplicadosConsecutivos_(secuencia) {
+  var salida = [];
+  for (var i = 0; i < secuencia.length; i++) {
+    if (!salida.length || salida[salida.length - 1].id !== secuencia[i].id) salida.push(secuencia[i]);
+  }
+  return salida;
+}
+
+
+function eliminarDuplicadosPorId_(secuencia) {
+  var salida = [];
+  var vistos = {};
+
+  (secuencia || []).forEach(function(item) {
+    if (!item || !item.id || vistos[item.id]) return;
+    vistos[item.id] = true;
+    salida.push(item);
+  });
+
+  return salida;
+}
+
+function procesarCompilacionSegunModo(seleccionados, metodo, config) {
+  if (metodo && metodo !== 'COLAB') {
+    throw new Error("Solo está habilitado el modo 'COLAB'.");
+  }
+
+  var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
+  var sheet = obtenerHojaSegura(nombreHoja);
+  var datos = obtenerDatosParaCompilar(seleccionados);
+  var endpoint = normalizarUrlEndpoint(sheet.getRange('C8').getDisplayValue(), 'compilar');
+  var baseServidor = obtenerBaseServidorCompilador_(endpoint);
   var token = ScriptApp.getOAuthToken();
+  var opciones = config || {};
+  var politicaDuplicados = ['nuevo', 'reemplazar', 'omitir'].indexOf(opciones.duplicados) !== -1
+    ? opciones.duplicados
+    : 'nuevo';
+
+  var limitePaginas = obtenerValorConfigCompilador_('LIMITE_PAGINAS', 600);
+  var paralelas = obtenerValorConfigCompilador_('PETICIONES_PARALELAS', 2);
+  var estricto = Boolean(obtenerValorConfigSistema_('MODO_ESTRICTO_COMPILADOR', true));
+  var cacheCarpetas = {};
   var solicitudes = [];
   var referencias = [];
-  preparados.forEach(function(item) {
-    var carpetasOrigen = item.tomo.archivos.map(function(a) { return a.carpetaOrigen; });
-    var carpetasUnicas = [];
-    carpetasOrigen.forEach(function(c) { if (carpetasUnicas.indexOf(c) === -1) carpetasUnicas.push(c); });
-    var resumenCarpetas = carpetasUnicas.join('_').replace(/[\\/:*?"<>|]/g, '-').substring(0, 80) || 'GENERAL';
-    var fechaMarca = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
-    var nombreSalida = 'TOMO ' + item.numeracion.numeroTexto + '_' + resumenCarpetas + '_' + fechaMarca + '.pdf';
+  var omitidos = 0;
+
+  datos.compilaciones.forEach(function(comp, indice) {
+    var fileIds = [];
+    var tieneOriginales = false;
+
+    comp.archivos.forEach(function(item) {
+      fileIds.push(item.id);
+      if (item.type === 'Original') tieneOriginales = true;
+    });
+
+    if (!tieneOriginales || !fileIds.length) {
+      omitidos++;
+      return;
+    }
+
+    var destinoRaiz = DriveApp.getFolderById(datos.idC6);
+    var destino = getOrCreateFolder(destinoRaiz, comp.folderPrimerOrden, cacheCarpetas);
+    var nombreBase = sanitizarNombreArchivo('COMPILADO_' + comp.nombreCarpeta.toUpperCase());
+    var existentes = obtenerCompiladosExistentes_(destino, nombreBase);
+
+    if (existentes.length && politicaDuplicados === 'omitir') {
+      omitidos++;
+      return;
+    }
+
+    // En modo reemplazar NO se eliminan todavía los archivos buenos anteriores.
+    // Solo se enviarán a la papelera después de confirmar el nuevo resultado.
+    var idsReemplazar = politicaDuplicados === 'reemplazar'
+      ? existentes.map(function(file) { return file.getId(); })
+      : [];
+
     var fechaInicio = new Date();
+    var marca = Utilities.formatDate(
+      fechaInicio,
+      Session.getScriptTimeZone(),
+      'yyyyMMdd_HHmmss_SSS'
+    );
+    var nombreSalida = nombreBase + ' (' + marca + '_' + (indice + 1) + ').pdf';
     var requestId = Utilities.getUuid();
-    var paginasEsperadas = item.tomo.totalContenido + (item.caratula ? 1 : 0);
-    var sourceCount = item.tomo.archivos.length + (item.caratula ? 1 : 0);
+
     solicitudes.push({
       url: endpoint,
       method: 'post',
@@ -851,183 +536,520 @@ function herramienta3_GenerarTomos(seleccionados, config) {
         modo_async: true,
         strict_mode: estricto,
         replace_existing: false,
-        expected_pages: paginasEsperadas,
-        expected_source_count: sourceCount,
-        caratula_id: item.caratula ? item.caratula.getId() : '',
-        file_ids: item.tomo.archivos.map(function(archivo) { return archivo.id; }),
-        destination_folder_id: carpetaSalida.getId(),
-        output_filename: nombreSalida
+        expected_source_count: fileIds.length,
+        file_ids: fileIds,
+        destination_folder_id: destino.getId(),
+        output_filename: nombreSalida,
+        limite_paginas: limitePaginas
       }),
       muteHttpExceptions: true
     });
+
     referencias.push({
-      tomo: { totalFisicas: item.tomo.totalFisicas },
-      numeracion: {
-        numeroProyectado: item.numeracion.numeroProyectado,
-        numeroVisible: item.numeracion.numeroVisible,
-        totalVisible: item.numeracion.totalVisible,
-        numeroTexto: item.numeracion.numeroTexto,
-        totalTexto: item.numeracion.totalTexto,
-        manual: item.numeracion.manual
+      comp: {
+        nombreCarpeta: comp.nombreCarpeta,
+        alerta: comp.alerta || ''
       },
       nombreSalida: nombreSalida,
+      prefijoSalida: nombreSalida.replace(/\.pdf$/i, ''),
+      destinoId: destino.getId(),
       fechaInicioMs: fechaInicio.getTime(),
-      paginasEsperadas: paginasEsperadas,
       requestId: requestId,
+      idsReemplazar: idsReemplazar,
       ultimoError: '',
-      intentos: 0
+      intentos: 0,
+      estabilidad: { firma: '', rondas: 0, partes: [] }
     });
   });
-  var respuestas = ejecutarFetchAllPorBloques_(solicitudes, Number(obtenerValorConfigSistema_('PETICIONES_PARALELAS', 2)));
-  var pendientes = [], sinConfirmacion = [], logs = [], exitosos = 0, errores = 0;
+
+  if (!solicitudes.length) {
+    return {
+      status: 'success', creados: 0, pendientes: 0, omitidos: omitidos, errores: 0,
+      archivosGenerados: [], // 👈 NUEVO
+      mensaje: 'No hubo compilaciones nuevas para enviar. Omitidos: ' + omitidos + '.'
+    };
+  }
+
+  var logs = [];
+  var totalCreados = 0;
+  var totalErrores = 0;
+  var pendientes = [];
+  var sinConfirmacion = [];
   var archivosGenerados = []; // 👈 NUEVO
+  var respuestasIniciales = ejecutarSolicitudesSegurasPorBloques_(solicitudes, paralelas);
+
   for (var i = 0; i < referencias.length; i++) {
-    var ref = referencias[i];
-    var response = respuestas[i] || null;
-    var code = response ? response.getResponseCode() : 0;
-    var text = response ? response.getContentText() : '';
-    var data = response ? parsearJsonSeguro(text) : null;
+    var resultadoInicial = respuestasIniciales[i] || {};
+    var refInicial = referencias[i];
+
+    if (!resultadoInicial.response) {
+      refInicial.ultimoError = resultadoInicial.error || 'No se recibió respuesta inicial.';
+      sinConfirmacion.push(refInicial);
+      continue;
+    }
+
+    var code = resultadoInicial.response.getResponseCode();
+    var text = resultadoInicial.response.getContentText();
+    var data = parsearJsonSeguro(text);
+
     if ((code === 200 || code === 202) && data && data.job_id) {
-      pendientes.push({ jobId: String(data.job_id), ref: ref });
+      pendientes.push({ jobId: String(data.job_id), ref: refInicial });
       continue;
     }
-    if (code >= 200 && code < 300 && data && (data.status === 'success' || data.status === 'partial')) {
-      if (registrarResultadoTomo_(data, ref, carpetaSalida, logs, false, archivosGenerados)) exitosos++;
-      else errores++;
+
+    if (code >= 200 && code < 300 && data &&
+        (data.status === 'success' || data.status === 'partial') &&
+        Array.isArray(data.partes)) {
+      var cuenta = registrarResultadoCompilador_(data, refInicial, logs, false, archivosGenerados);
+      totalCreados += cuenta.creados;
+      totalErrores += cuenta.errores;
       continue;
     }
-    ref.ultimoError = construirDetalleHttpTomos_(code, data, text);
-    sinConfirmacion.push(ref);
+
+    refInicial.ultimoError = construirDetalleHttpCompilador_(code, data, text);
+    sinConfirmacion.push(refInicial);
   }
-  if (logs.length) {
-    var inicio = Math.max(15, sheet.getLastRow() + 1);
-    sheet.getRange(inicio, 1, logs.length, 6).setValues(logs);
-  }
-  guardarPendientesTomos_(baseServidor, carpetaSalida.getId(), pendientes, sinConfirmacion);
-  var restantes = pendientes.length + sinConfirmacion.length;
+
+  escribirLogsCompilador_(sheet, logs);
+  guardarPendientesCompilador_(baseServidor, pendientes, sinConfirmacion);
+
+  var cantidadPendiente = pendientes.length + sinConfirmacion.length;
   return {
-    status: restantes ? 'pending' : (errores ? (exitosos ? 'partial' : 'error') : 'success'),
-    exitosos: exitosos,
-    pendientes: restantes,
+    status: cantidadPendiente ? 'pending' : (totalErrores ? 'partial' : 'success'),
+    creados: totalCreados,
+    pendientes: cantidadPendiente,
     omitidos: omitidos,
-    errores: errores,
+    errores: totalErrores,
     archivosGenerados: archivosGenerados, // 👈 NUEVO
-    mensaje: '✅ Tomos enviados. Confirmados inmediatamente: ' + exitosos + ' | Pendientes: ' + restantes + ' | Omitidos: ' + omitidos + ' | Errores: ' + errores + '. ' + (restantes ? 'Usa “Consultar pendientes” para actualizar el resultado.' : '')
+    mensaje:
+      '✅ Solicitudes enviadas. PDF confirmados inmediatamente: ' + totalCreados +
+      ' | Pendientes: ' + cantidadPendiente +
+      ' | Omitidos: ' + omitidos +
+      ' | Errores: ' + totalErrores + '. ' +
+      (cantidadPendiente
+        ? 'Los trabajos continúan en Colab. Usa “Consultar pendientes” para actualizar el resultado.'
+        : '')
   };
 }
 
-// ====================================================================
-// ⏳ CONSULTA REANUDABLE DE TOMOS
-// ====================================================================
-var CLAVE_PENDIENTES_TOMOS_ = 'PENDIENTES_TOMOS_V3';
+function obtenerValorConfigCompilador_(clave, valorPredeterminado) {
+  try {
+    if (
+      typeof CONFIG_SISTEMA !== 'undefined' &&
+      CONFIG_SISTEMA &&
+      CONFIG_SISTEMA[clave] !== undefined &&
+      CONFIG_SISTEMA[clave] !== null &&
+      CONFIG_SISTEMA[clave] !== ''
+    ) {
+      var valor = Number(CONFIG_SISTEMA[clave]);
+      if (isFinite(valor) && valor > 0) return valor;
+    }
+  } catch (e) {}
 
-function guardarPendientesTomos_(baseServidor, carpetaSalidaId, pendientes, sinConfirmacion) {
-  var anterior = leerEstadoJsonFragmentado_(CLAVE_PENDIENTES_TOMOS_) || {};
+  return valorPredeterminado;
+}
+
+function obtenerBaseServidorCompilador_(endpoint) {
+  return String(endpoint || '')
+    .trim()
+    .replace(/\/compilar\/?$/i, '')
+    .replace(/\/+$/, '');
+}
+
+function construirDetalleHttpCompilador_(code, data, text) {
+  var detalle = '';
+
+  if (data && data.detail) {
+    detalle = String(data.detail);
+  } else if (data && data.message) {
+    detalle = String(data.message);
+  } else if (text) {
+    detalle = String(text).substring(0, 300);
+  } else {
+    detalle = 'Respuesta vacía';
+  }
+
+  return 'HTTP ' + code + ': ' + detalle;
+}
+
+function registrarResultadoCompilador_(data, ref, logs, recuperado, archivosGenerados) {
+  var resultado = { creados: 0, errores: 0 };
+  var partes = data && Array.isArray(data.partes) ? data.partes : [];
+
+  if (!partes.length) {
+    resultado.errores++;
+    logs.push([new Date(), ref.comp.nombreCarpeta, 'Error en ejecución',
+      '❌ El servidor no creó partes.', '', '']);
+    return resultado;
+  }
+
+  partes.forEach(function(parte, indice) {
+    var mensaje = recuperado
+      ? '✅ PDF encontrado en Drive después de una interrupción de conexión'
+      : '✅ Compilado por Colab';
+
+    if (partes.length > 1) mensaje += ' (Parte ' + (indice + 1) + ')';
+    if (data.status === 'partial') mensaje += ' | ⚠️ Algunos archivos fueron omitidos por el servidor';
+    if (ref.comp.alerta) mensaje += ' | ' + ref.comp.alerta;
+
+    logs.push([
+      new Date(),
+      recuperado ? 'Recuperación automática desde Drive' : 'Servidor Google Colab',
+      parte.final_name || ref.nombreSalida,
+      mensaje,
+      parte.url || '',
+      parte.id || ''
+    ]);
+
+    if (archivosGenerados && parte.id) { // 👈 NUEVO
+      archivosGenerados.push({
+        origen: ref.comp.nombreCarpeta,
+        id: parte.id,
+        url: parte.url || '',
+        name: parte.final_name || ref.nombreSalida
+      });
+    }
+
+    resultado.creados++;
+  });
+
+  // Reemplazo seguro: primero se confirma la nueva salida y recién después
+  // se eliminan las versiones anteriores.
+  if (resultado.creados > 0 && data.status !== 'partial' && ref.idsReemplazar) {
+    enviarArchivosPapeleraPorId_(
+      ref.idsReemplazar,
+      partes.map(function(parte) { return parte.id; })
+    );
+    ref.idsReemplazar = [];
+  }
+
+  return resultado;
+}
+
+function actualizarEstabilidadRecuperacion_(ref, forzar) {
+  var encontrado = buscarResultadosRecientesCompilador_(ref);
+
+  if (!encontrado.partes.length) {
+    ref.estabilidad.firma = '';
+    ref.estabilidad.rondas = 0;
+    ref.estabilidad.partes = [];
+    return null;
+  }
+
+  if (encontrado.firma === ref.estabilidad.firma) {
+    ref.estabilidad.rondas++;
+  } else {
+    ref.estabilidad.firma = encontrado.firma;
+    ref.estabilidad.rondas = 1;
+    ref.estabilidad.partes = encontrado.partes;
+  }
+
+  if (forzar || ref.estabilidad.rondas >= 2) {
+    return {
+      status: 'success',
+      recovered: true,
+      partes: ref.estabilidad.partes
+    };
+  }
+
+  return null;
+}
+
+function recuperarResultadoFinalDesdeDrive_(ref) {
+  var encontrado = buscarResultadosRecientesCompilador_(ref);
+
+  if (!encontrado.partes.length) return null;
+
+  return {
+    status: 'success',
+    recovered: true,
+    partes: encontrado.partes
+  };
+}
+
+function buscarResultadosRecientesCompilador_(ref) {
+  var carpeta = DriveApp.getFolderById(ref.destinoId);
+  var files = carpeta.getFilesByType(MimeType.PDF);
+  var prefijo = String(ref.prefijoSalida || '').toUpperCase();
+  var fechaMinima = Number(ref.fechaInicioMs || 0) - 120000;
+  var encontrados = [];
+
+  while (files.hasNext()) {
+    var file = files.next();
+    var nombre = file.getName();
+    var fechaCreacion = file.getDateCreated().getTime();
+
+    if (
+      nombre.toUpperCase().indexOf(prefijo) === 0 &&
+      fechaCreacion >= fechaMinima
+    ) {
+      encontrados.push({
+        id: file.getId(),
+        url: file.getUrl(),
+        final_name: nombre,
+        size: file.getSize(),
+        created: fechaCreacion
+      });
+    }
+  }
+
+  encontrados.sort(function(a, b) {
+    return a.final_name.localeCompare(
+      b.final_name,
+      'es',
+      { numeric: true, sensitivity: 'base' }
+    );
+  });
+
+  var firma = encontrados.map(function(item) {
+    return [
+      item.id,
+      item.size,
+      item.final_name
+    ].join(':');
+  }).join('|');
+
+  var partes = encontrados.map(function(item) {
+    return {
+      id: item.id,
+      url: item.url,
+      final_name: item.final_name
+    };
+  });
+
+  return {
+    firma: firma,
+    partes: partes
+  };
+}
+
+function obtenerCompiladosExistentes_(carpeta, nombreBase) {
+  var encontrados = [];
+  var files = carpeta.getFilesByType(MimeType.PDF);
+  var base = nombreBase.toUpperCase();
+
+  while (files.hasNext()) {
+    var file = files.next();
+    if (file.getName().toUpperCase().indexOf(base) === 0) {
+      encontrados.push(file);
+    }
+  }
+
+  return encontrados;
+}
+
+function ejecutarSolicitudesSegurasPorBloques_(solicitudes, tamanoBloque) {
+  var resultados = [];
+  var limite = Math.max(1, Number(tamanoBloque) || 1);
+
+  for (var i = 0; i < solicitudes.length; i += limite) {
+    var bloque = solicitudes.slice(i, i + limite);
+
+    try {
+      var respuestas = UrlFetchApp.fetchAll(bloque);
+
+      for (var r = 0; r < respuestas.length; r++) {
+        resultados.push({
+          response: respuestas[r],
+          error: ''
+        });
+      }
+    } catch (errorBloque) {
+      for (var j = 0; j < bloque.length; j++) {
+        try {
+          resultados.push({
+            response: UrlFetchApp.fetch(bloque[j].url, bloque[j]),
+            error: ''
+          });
+        } catch (errorIndividual) {
+          resultados.push({
+            response: null,
+            error:
+              'NetworkError: ' +
+              (errorIndividual && errorIndividual.message
+                ? errorIndividual.message
+                : String(errorIndividual || errorBloque))
+          });
+        }
+      }
+    }
+  }
+
+  return resultados;
+}
+
+function escribirLogsCompilador_(sheet, filas) {
+  if (!filas.length) return;
+
+  var inicio = Math.max(15, sheet.getLastRow() + 1);
+  sheet.getRange(inicio, 1, filas.length, 6).setValues(filas);
+}
+
+// ====================================================================
+// ⏳ CONSULTA REANUDABLE DE COMPILACIONES
+// ====================================================================
+var CLAVE_PENDIENTES_COMPILADOR_ = 'PENDIENTES_COMPILADOR_V3';
+
+function guardarPendientesCompilador_(baseServidor, pendientes, sinConfirmacion) {
+  var anterior = leerEstadoJsonFragmentado_(CLAVE_PENDIENTES_COMPILADOR_) || {};
   var jobs = (anterior.pendientes || []).concat(pendientes || []);
   var inciertos = (anterior.sinConfirmacion || []).concat(sinConfirmacion || []);
   var vistos = {};
+
   jobs = jobs.filter(function(item) {
     var clave = String(item.jobId || '') + '|' + String(item.ref && item.ref.requestId || '');
     if (!clave || vistos[clave]) return false;
     vistos[clave] = true;
     return true;
   });
+
   inciertos = inciertos.filter(function(ref) {
     var clave = 'S|' + String(ref && ref.requestId || '');
     if (!ref || !ref.requestId || vistos[clave]) return false;
     vistos[clave] = true;
     return true;
   });
+
   if (!jobs.length && !inciertos.length) {
-    eliminarEstadoJsonFragmentado_(CLAVE_PENDIENTES_TOMOS_);
+    eliminarEstadoJsonFragmentado_(CLAVE_PENDIENTES_COMPILADOR_);
     return;
   }
-  guardarEstadoJsonFragmentado_(CLAVE_PENDIENTES_TOMOS_, {
+
+  guardarEstadoJsonFragmentado_(CLAVE_PENDIENTES_COMPILADOR_, {
     version: 3,
     baseServidor: baseServidor,
-    carpetaSalidaId: carpetaSalidaId || anterior.carpetaSalidaId || '',
     actualizado: Date.now(),
     pendientes: jobs,
     sinConfirmacion: inciertos
   });
 }
 
-function consultarTomosPendientes() {
-  var estado = leerEstadoJsonFragmentado_(CLAVE_PENDIENTES_TOMOS_);
+function consultarCompilacionesPendientes() {
+  var estado = leerEstadoJsonFragmentado_(CLAVE_PENDIENTES_COMPILADOR_);
   if (!estado || (!(estado.pendientes || []).length && !(estado.sinConfirmacion || []).length)) {
-    return { status: 'success', exitosos: 0, pendientes: 0, errores: 0, archivosGenerados: [], mensaje: 'No existen tomos pendientes.' };
+    return { status: 'success', creados: 0, pendientes: 0, errores: 0,
+      archivosGenerados: [], // 👈 NUEVO
+      mensaje: 'No existen compilaciones pendientes.' };
   }
-  var sheet = obtenerHojaSegura(CONFIG_SISTEMA.HOJA_TOMOS);
-  var endpoint = normalizarUrlEndpoint(sheet.getRange('C8').getDisplayValue(), 'tomos');
-  var baseServidor = obtenerBaseServidorTomos_(endpoint);
+
+  var sheet = obtenerHojaSegura(CONFIG_SISTEMA.HOJA_COMPILADOS);
+  var endpoint = normalizarUrlEndpoint(sheet.getRange('C8').getDisplayValue(), 'compilar');
+  var baseServidor = obtenerBaseServidorCompilador_(endpoint);
   var token = ScriptApp.getOAuthToken();
-  var carpetaSalida = DriveApp.getFolderById(estado.carpetaSalidaId);
   var pendientes = estado.pendientes || [];
   var inciertos = estado.sinConfirmacion || [];
-  var siguientes = [], siguientesInciertos = [], logs = [], exitosos = 0, errores = 0;
+  var siguientes = [];
+  var siguientesInciertos = [];
+  var logs = [];
+  var creados = 0;
+  var errores = 0;
   var archivosGenerados = []; // 👈 NUEVO
+
   var consultas = pendientes.map(function(item) {
-    return { url: baseServidor + '/trabajos/' + encodeURIComponent(item.jobId), method: 'get', headers: obtenerHeadersServidor_(token), muteHttpExceptions: true };
+    return {
+      url: baseServidor + '/trabajos/' + encodeURIComponent(item.jobId),
+      method: 'get',
+      headers: obtenerHeadersServidor_(token),
+      muteHttpExceptions: true
+    };
   });
-  var respuestas = ejecutarFetchAllPorBloques_(consultas, Math.max(1, Number(obtenerValorConfigSistema_('PETICIONES_PARALELAS', 2)) * 2));
+  var respuestas = ejecutarSolicitudesSegurasPorBloques_(
+    consultas,
+    Math.max(1, Number(obtenerValorConfigSistema_('PETICIONES_PARALELAS', 2)) * 2)
+  );
+
   pendientes.forEach(function(item, indice) {
+    var resultado = respuestas[indice] || {};
     var ref = item.ref;
-    var response = respuestas[indice] || null;
-    var code = response ? response.getResponseCode() : 0;
-    var text = response ? response.getContentText() : '';
-    var data = response ? parsearJsonSeguro(text) : null;
-    if (code === 200 && data && (data.job_state === 'queued' || data.job_state === 'running' || data.status === 'accepted' || data.status === 'running')) {
-      siguientes.push(item); return;
-    }
-    if (code === 200 && data && (data.status === 'success' || data.status === 'partial') && data.id) {
-      if (registrarResultadoTomo_(data, ref, carpetaSalida, logs, false, archivosGenerados)) exitosos++;
-      else errores++;
+    if (!resultado.response) {
+      ref.intentos = Number(ref.intentos || 0) + 1;
+      ref.ultimoError = resultado.error || 'No se pudo consultar el trabajo.';
+      var rec = actualizarEstabilidadRecuperacion_(ref);
+      if (rec) {
+        var c = registrarResultadoCompilador_(rec, ref, logs, true, archivosGenerados);
+        creados += c.creados; errores += c.errores;
+      } else if (ref.intentos >= 6) {
+        errores++;
+        logs.push([new Date(), ref.comp.nombreCarpeta, 'Sin confirmación',
+          '❌ ' + ref.ultimoError, '', '']);
+      } else {
+        siguientes.push(item);
+      }
       return;
     }
-    var recuperado = buscarTomoFinalReciente_(carpetaSalida, ref.nombreSalida, new Date(ref.fechaInicioMs));
+
+    var code = resultado.response.getResponseCode();
+    var text = resultado.response.getContentText();
+    var data = parsearJsonSeguro(text);
+
+    if (code === 200 && data &&
+        (data.job_state === 'queued' || data.job_state === 'running' ||
+         data.status === 'accepted' || data.status === 'running')) {
+      siguientes.push(item);
+      return;
+    }
+
+    if (code === 200 && data &&
+        (data.status === 'success' || data.status === 'partial') &&
+        Array.isArray(data.partes)) {
+      var cuenta = registrarResultadoCompilador_(data, ref, logs, false, archivosGenerados);
+      creados += cuenta.creados; errores += cuenta.errores;
+      return;
+    }
+
+    var recuperado = recuperarResultadoFinalDesdeDrive_(ref);
     if (recuperado) {
-      recuperado.paginas = ref.paginasEsperadas;
-      if (registrarResultadoTomo_(recuperado, ref, carpetaSalida, logs, true, archivosGenerados)) exitosos++;
-      else errores++;
+      var cuentaRec = registrarResultadoCompilador_(recuperado, ref, logs, true, archivosGenerados);
+      creados += cuentaRec.creados; errores += cuentaRec.errores;
     } else if (data && (data.job_state === 'failed' || data.status === 'error')) {
       errores++;
-      logs.push([new Date(), 'TOMO ' + etiquetaNumeracionTomo_(ref.numeracion), 'Error en ejecución', '❌ ' + (data.detail || data.message || 'El trabajo falló.'), '', '']);
+      logs.push([new Date(), ref.comp.nombreCarpeta, 'Error en ejecución',
+        '❌ ' + (data.detail || data.message || 'El trabajo falló.'), '', '']);
     } else {
       ref.intentos = Number(ref.intentos || 0) + 1;
-      ref.ultimoError = construirDetalleHttpTomos_(code, data, text);
+      ref.ultimoError = construirDetalleHttpCompilador_(code, data, text);
       if (ref.intentos >= 6) {
         errores++;
-        logs.push([new Date(), 'TOMO ' + etiquetaNumeracionTomo_(ref.numeracion), 'Sin confirmación', '❌ ' + ref.ultimoError, '', '']);
-      } else siguientes.push(item);
+        logs.push([new Date(), ref.comp.nombreCarpeta, 'Sin confirmación',
+          '❌ ' + ref.ultimoError, '', '']);
+      } else {
+        siguientes.push(item);
+      }
     }
   });
+
   inciertos.forEach(function(ref) {
-    var recuperado = buscarTomoFinalReciente_(carpetaSalida, ref.nombreSalida, new Date(ref.fechaInicioMs));
+    var recuperado = actualizarEstabilidadRecuperacion_(ref);
     if (recuperado) {
-      recuperado.paginas = ref.paginasEsperadas;
-      if (registrarResultadoTomo_(recuperado, ref, carpetaSalida, logs, true, archivosGenerados)) exitosos++;
-      else errores++;
+      var cuenta = registrarResultadoCompilador_(recuperado, ref, logs, true, archivosGenerados);
+      creados += cuenta.creados; errores += cuenta.errores;
     } else {
       ref.intentos = Number(ref.intentos || 0) + 1;
       if (ref.intentos >= 6) {
         errores++;
-        logs.push([new Date(), 'TOMO ' + etiquetaNumeracionTomo_(ref.numeracion), 'Error de conexión', '❌ No se confirmó el trabajo ni se encontró el PDF en Drive. ' + (ref.ultimoError || ''), '', '']);
-      } else siguientesInciertos.push(ref);
+        logs.push([new Date(), ref.comp.nombreCarpeta, 'Error de conexión',
+          '❌ No se confirmó el trabajo ni se encontró el PDF en Drive. ' +
+          (ref.ultimoError || ''), '', '']);
+      } else {
+        siguientesInciertos.push(ref);
+      }
     }
   });
-  if (logs.length) {
-    var inicio = Math.max(15, sheet.getLastRow() + 1);
-    sheet.getRange(inicio, 1, logs.length, 6).setValues(logs);
-  }
-  eliminarEstadoJsonFragmentado_(CLAVE_PENDIENTES_TOMOS_);
-  guardarPendientesTomos_(baseServidor, carpetaSalida.getId(), siguientes, siguientesInciertos);
+
+  escribirLogsCompilador_(sheet, logs);
+  eliminarEstadoJsonFragmentado_(CLAVE_PENDIENTES_COMPILADOR_);
+  guardarPendientesCompilador_(baseServidor, siguientes, siguientesInciertos);
+
   var restantes = siguientes.length + siguientesInciertos.length;
   return {
-    status: restantes ? 'pending' : (errores ? (exitosos ? 'partial' : 'error') : 'success'),
-    exitosos: exitosos,
+    status: restantes ? 'pending' : (errores ? (creados ? 'partial' : 'error') : 'success'),
+    creados: creados,
     pendientes: restantes,
     errores: errores,
     archivosGenerados: archivosGenerados, // 👈 NUEVO
-    mensaje: 'Consulta terminada. Tomos confirmados: ' + exitosos + ' | Pendientes: ' + restantes + ' | Errores: ' + errores + '.'
+    mensaje: 'Consulta terminada. PDF confirmados: ' + creados +
+      ' | Pendientes: ' + restantes + ' | Errores: ' + errores + '.'
   };
 }
+
+
