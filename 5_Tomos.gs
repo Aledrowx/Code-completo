@@ -567,6 +567,7 @@ function herramienta2_Caratulas(seleccionados, config) {
   var carpetaBase = DriveApp.getFolderById(idDestino);
   var carpetaSalida = getOrCreateFolder(carpetaBase, String(obtenerValorConfigSistema_('CARPETA_INDICES_TOMOS', 'ÍNDICES DE TOMOS')), {});
   var creadas = 0, reemplazadas = 0, errores = [], logs = [];
+  var archivosGenerados = []; // 👈 NUEVO
   numeraciones.forEach(function(numeracion) {
     var tomo = numeracion.tomo;
     var nombrePdf = nombreCaratulaTomo_(numeracion);
@@ -579,6 +580,12 @@ function herramienta2_Caratulas(seleccionados, config) {
       guardarCaratulaTomoReciente_(numeracion, pdf.getId(), carpetaSalida.getId());
       creadas++;
       if (existentesAntes) reemplazadas++;
+      archivosGenerados.push({ // 👈 NUEVO
+        origen: 'ÍNDICE TOMO ' + numeracion.numeroTexto,
+        id: pdf.getId(),
+        url: pdf.getUrl(),
+        name: nombrePdf
+      });
       logs.push([new Date(), 'Google Apps Script - Índices', nombrePdf, existentesAntes ? '♻️ Índice creado y versión anterior reemplazada' : '✅ Índice de tomo creado', pdf.getUrl(), pdf.getId()]);
     } catch (error) {
       errores.push('Tomo proyectado ' + tomo.numero + ' (' + etiquetaNumeracionTomo_(numeracion) + '): ' + error.message);
@@ -596,6 +603,7 @@ function herramienta2_Caratulas(seleccionados, config) {
     detalleErrores: errores,
     carpetaId: carpetaSalida.getId(),
     registrosAgregados: registrosAgregados,
+    archivosGenerados: archivosGenerados, // 👈 NUEVO
     mensaje: (errores.length ? '⚠️ Índices generados con observaciones. ' : '✅ Índices generados. ') +
       'Creados: ' + creadas + ' | Total de la proyección: ' + operacion.totalTomos + ' | Versiones anteriores reemplazadas: ' + reemplazadas + ' | Errores: ' + errores.length + ' | Actividades registradas: ' + registrosAgregados
   };
@@ -766,7 +774,7 @@ function construirDetalleHttpTomos_(code, data, text) {
   return 'HTTP ' + code + ': ' + detalle;
 }
 
-function registrarResultadoTomo_(data, ref, carpetaSalida, logs, recuperado) {
+function registrarResultadoTomo_(data, ref, carpetaSalida, logs, recuperado, archivosGenerados) {
   var id = data && data.id ? String(data.id) : '';
   var nombre = data && data.final_name ? String(data.final_name) : ref.nombreSalida;
   var paginas = Number(data && data.paginas) || 0;
@@ -782,6 +790,16 @@ function registrarResultadoTomo_(data, ref, carpetaSalida, logs, recuperado) {
   var mensaje = recuperado ? '✅ Tomo encontrado en Drive después de una interrupción de conexión' : '✅ Tomo ensamblado por Colab';
   if (data && data.status === 'partial') mensaje += ' | ⚠️ Algunos archivos no pudieron incorporarse';
   logs.push([new Date(), 'TOMO ' + etiquetaNumeracionTomo_(ref.numeracion), nombre, mensaje + ' (' + (paginas || esperadas || ref.tomo.totalFisicas) + ' páginas físicas)', data && data.url ? data.url : '', id]);
+
+  if (archivosGenerados && id) { // 👈 NUEVO
+    archivosGenerados.push({
+      origen: 'TOMO ' + etiquetaNumeracionTomo_(ref.numeracion),
+      id: id,
+      url: data && data.url ? data.url : '',
+      name: nombre
+    });
+  }
+
   return true;
 }
 
@@ -805,7 +823,7 @@ function herramienta3_GenerarTomos(seleccionados, config) {
     preparados.push({ tomo: numeracion.tomo, numeracion: numeracion, caratula: caratula });
   });
   if (!preparados.length) {
-    return { status: 'error', exitosos: 0, pendientes: 0, omitidos: omitidos, errores: 0, mensaje: 'No se envió ningún tomo. Faltan las carátulas requeridas en TOMOS!C6.' };
+    return { status: 'error', exitosos: 0, pendientes: 0, omitidos: omitidos, errores: 0, archivosGenerados: [], mensaje: 'No se envió ningún tomo. Faltan las carátulas requeridas en TOMOS!C6.' };
   }
   var carpetaBase = DriveApp.getFolderById(idDestinoTomos);
   var carpetaSalida = getOrCreateFolder(carpetaBase, String(obtenerValorConfigSistema_('CARPETA_TOMOS_FINALES', 'TOMOS FINALES')), {});
@@ -862,6 +880,7 @@ function herramienta3_GenerarTomos(seleccionados, config) {
   });
   var respuestas = ejecutarFetchAllPorBloques_(solicitudes, Number(obtenerValorConfigSistema_('PETICIONES_PARALELAS', 2)));
   var pendientes = [], sinConfirmacion = [], logs = [], exitosos = 0, errores = 0;
+  var archivosGenerados = []; // 👈 NUEVO
   for (var i = 0; i < referencias.length; i++) {
     var ref = referencias[i];
     var response = respuestas[i] || null;
@@ -873,7 +892,7 @@ function herramienta3_GenerarTomos(seleccionados, config) {
       continue;
     }
     if (code >= 200 && code < 300 && data && (data.status === 'success' || data.status === 'partial')) {
-      if (registrarResultadoTomo_(data, ref, carpetaSalida, logs, false)) exitosos++;
+      if (registrarResultadoTomo_(data, ref, carpetaSalida, logs, false, archivosGenerados)) exitosos++;
       else errores++;
       continue;
     }
@@ -892,6 +911,7 @@ function herramienta3_GenerarTomos(seleccionados, config) {
     pendientes: restantes,
     omitidos: omitidos,
     errores: errores,
+    archivosGenerados: archivosGenerados, // 👈 NUEVO
     mensaje: '✅ Tomos enviados. Confirmados inmediatamente: ' + exitosos + ' | Pendientes: ' + restantes + ' | Omitidos: ' + omitidos + ' | Errores: ' + errores + '. ' + (restantes ? 'Usa “Consultar pendientes” para actualizar el resultado.' : '')
   };
 }
@@ -935,7 +955,7 @@ function guardarPendientesTomos_(baseServidor, carpetaSalidaId, pendientes, sinC
 function consultarTomosPendientes() {
   var estado = leerEstadoJsonFragmentado_(CLAVE_PENDIENTES_TOMOS_);
   if (!estado || (!(estado.pendientes || []).length && !(estado.sinConfirmacion || []).length)) {
-    return { status: 'success', exitosos: 0, pendientes: 0, errores: 0, mensaje: 'No existen tomos pendientes.' };
+    return { status: 'success', exitosos: 0, pendientes: 0, errores: 0, archivosGenerados: [], mensaje: 'No existen tomos pendientes.' };
   }
   var sheet = obtenerHojaSegura(CONFIG_SISTEMA.HOJA_TOMOS);
   var endpoint = normalizarUrlEndpoint(sheet.getRange('C8').getDisplayValue(), 'tomos');
@@ -945,6 +965,7 @@ function consultarTomosPendientes() {
   var pendientes = estado.pendientes || [];
   var inciertos = estado.sinConfirmacion || [];
   var siguientes = [], siguientesInciertos = [], logs = [], exitosos = 0, errores = 0;
+  var archivosGenerados = []; // 👈 NUEVO
   var consultas = pendientes.map(function(item) {
     return { url: baseServidor + '/trabajos/' + encodeURIComponent(item.jobId), method: 'get', headers: obtenerHeadersServidor_(token), muteHttpExceptions: true };
   });
@@ -959,14 +980,14 @@ function consultarTomosPendientes() {
       siguientes.push(item); return;
     }
     if (code === 200 && data && (data.status === 'success' || data.status === 'partial') && data.id) {
-      if (registrarResultadoTomo_(data, ref, carpetaSalida, logs, false)) exitosos++;
+      if (registrarResultadoTomo_(data, ref, carpetaSalida, logs, false, archivosGenerados)) exitosos++;
       else errores++;
       return;
     }
     var recuperado = buscarTomoFinalReciente_(carpetaSalida, ref.nombreSalida, new Date(ref.fechaInicioMs));
     if (recuperado) {
       recuperado.paginas = ref.paginasEsperadas;
-      if (registrarResultadoTomo_(recuperado, ref, carpetaSalida, logs, true)) exitosos++;
+      if (registrarResultadoTomo_(recuperado, ref, carpetaSalida, logs, true, archivosGenerados)) exitosos++;
       else errores++;
     } else if (data && (data.job_state === 'failed' || data.status === 'error')) {
       errores++;
@@ -984,7 +1005,7 @@ function consultarTomosPendientes() {
     var recuperado = buscarTomoFinalReciente_(carpetaSalida, ref.nombreSalida, new Date(ref.fechaInicioMs));
     if (recuperado) {
       recuperado.paginas = ref.paginasEsperadas;
-      if (registrarResultadoTomo_(recuperado, ref, carpetaSalida, logs, true)) exitosos++;
+      if (registrarResultadoTomo_(recuperado, ref, carpetaSalida, logs, true, archivosGenerados)) exitosos++;
       else errores++;
     } else {
       ref.intentos = Number(ref.intentos || 0) + 1;
@@ -1006,6 +1027,7 @@ function consultarTomosPendientes() {
     exitosos: exitosos,
     pendientes: restantes,
     errores: errores,
+    archivosGenerados: archivosGenerados, // 👈 NUEVO
     mensaje: 'Consulta terminada. Tomos confirmados: ' + exitosos + ' | Pendientes: ' + restantes + ' | Errores: ' + errores + '.'
   };
 }
