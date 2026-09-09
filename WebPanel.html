@@ -42,7 +42,9 @@
       --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
-    body { background: var(--bg-main); color: var(--text-main); font-size: 14px; line-height: 1.4; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { background: var(--bg-main); color: var(--text-main); font-size: 14px; line-height: 1.4; overflow-x: hidden; }
+    img, svg { max-width: 100%; }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: var(--bg-subtle); }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -69,7 +71,7 @@
     .input-wrapper i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-light); }
     .input-wrapper input {
       width: 100%; padding: 10px 12px 10px 36px; border: 1px solid var(--border-strong);
-      border-radius: var(--radius-sm); font-size: 14px; outline: none; transition: border-color .15s;
+      border-radius: var(--radius-sm); font-size: 16px; outline: none; transition: border-color .15s;
     }
     .input-wrapper input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
     .btn-primary {
@@ -87,14 +89,14 @@
       display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
       position: sticky; top: 0; z-index: 20;
     }
-    .topbar-left { display: flex; align-items: center; gap: 16px; }
+    .topbar-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
     .hamburger {
       width: 34px; height: 34px; border: none; background: transparent; border-radius: var(--radius-sm);
-      cursor: pointer; color: var(--text-muted); font-size: 16px;
+      cursor: pointer; color: var(--text-muted); font-size: 16px; flex-shrink: 0;
     }
     .hamburger:hover { background: var(--bg-subtle); }
-    .topbar-title { font-size: 18px; font-weight: 700; }
-    .topbar-right { display: flex; align-items: center; gap: 18px; }
+    .topbar-title { font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-right { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
     .bell-wrapper { position: relative; cursor: pointer; color: var(--text-muted); font-size: 17px; }
     .bell-wrapper:hover { color: var(--primary); }
     .bell-badge {
@@ -104,10 +106,11 @@
     .topbar-user { display: flex; align-items: center; gap: 10px; }
 
     /* DASHBOARD LAYOUT */
-    .dashboard { display: flex; min-height: calc(100vh - 60px); }
+    .dashboard { display: flex; min-height: calc(100vh - 60px); position: relative; }
     .sidebar {
       width: 240px; background: var(--bg-card); border-right: 1px solid var(--border);
       display: flex; flex-direction: column; padding: 20px 0; flex-shrink: 0;
+      transition: transform .2s ease;
     }
     .sidebar .nav-section { margin-bottom: 24px; }
     .nav-label { font-size: 11px; font-weight: 700; color: var(--text-light); padding: 0 20px 8px; letter-spacing: .5px; }
@@ -140,19 +143,19 @@
 
     .card {
       background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);
-      padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow-sm);
+      padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow-sm); min-width: 0;
     }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
     .card-header h2 { font-size: 17px; }
     .card-refresh { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 14px; }
     .card-refresh:hover { color: var(--primary); }
 
-    .stepper { display: flex; gap: 28px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
-    .step { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-light); font-weight: 600; font-size: 14px; }
+    .stepper { display: flex; gap: 28px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .step { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-light); font-weight: 600; font-size: 14px; white-space: nowrap; flex-shrink: 0; }
     .step-num {
       width: 24px; height: 24px; border-radius: 50%; background: var(--border); color: #fff;
       display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
-      transition: background .15s;
+      transition: background .15s; flex-shrink: 0;
     }
     .step.active { color: var(--accent-orange); }
     .step.active .step-num { background: var(--accent-orange); }
@@ -167,7 +170,7 @@
     .result-entry.error { border-left-color: var(--danger); }
     .result-entry.warn { border-left-color: var(--warning); }
     .result-entry .result-time { font-size: 11px; color: var(--text-light); margin-bottom: 2px; }
-    .result-entry .result-msg { font-size: 13px; }
+    .result-entry .result-msg { font-size: 13px; word-break: break-word; }
 
     .btn {
       display: inline-block; padding: 8px 16px; border: none; border-radius: var(--radius-sm);
@@ -192,20 +195,20 @@
     .form-label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px; }
     .form-input, .form-select {
       width: 100%; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
-      font-size: 14px; outline: none;
+      font-size: 16px; outline: none;
     }
     .form-input:focus, .form-select:focus { border-color: var(--primary); }
 
     .info-banner {
       background: var(--info-bg); border: 1px solid var(--info-border); color: var(--text-muted);
-      padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 14px;
+      padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 14px; word-break: break-word;
     }
     .purple-box { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: var(--radius-sm); padding: 14px; }
     .purple-box h4 { color: var(--accent-purple); margin-bottom: 4px; }
     .purple-box p { color: var(--text-muted); font-size: 13px; }
 
     .tree-container {
-      max-height: 220px; overflow-y: auto; border: 1px solid var(--border-strong);
+      max-height: 220px; overflow-y: auto; overflow-x: auto; border: 1px solid var(--border-strong);
       border-radius: var(--radius-sm); padding: 8px; background: var(--bg-subtle);
     }
     ul { list-style: none; padding-left: 18px; }
@@ -218,7 +221,7 @@
     .pdf-label-text.pdf-sin-dato { color: var(--warning); font-style: italic; }
 
     /* Menú de selección por capas (ANEXOS) */
-    .folder-node { display: flex; align-items: center; gap: 4px; width: 100%; }
+    .folder-node { display: flex; align-items: center; gap: 4px; width: 100%; flex-wrap: wrap; }
     .folder-node > label { display: flex; align-items: center; flex: 1; min-width: 0; overflow: hidden; }
     .folder-node > label > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .anexo-menu { position: relative; display: inline-block; margin-left: auto; flex-shrink: 0; padding-left: 8px; }
@@ -230,7 +233,7 @@
     .anexo-menu-list {
       display: none; position: absolute; top: 100%; right: 0; z-index: 30; margin-top: 4px;
       background: #fff; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
-      box-shadow: var(--shadow-md); min-width: 220px; padding: 4px;
+      box-shadow: var(--shadow-md); min-width: 220px; max-width: min(280px, 80vw); padding: 4px;
     }
     .anexo-menu-list.open { display: block; }
     .anexo-menu-item {
@@ -240,31 +243,31 @@
     .anexo-menu-item:hover { background: var(--primary-light); color: var(--primary); }
     .anexo-menu-empty { padding: 6px 10px; font-size: 12px; color: var(--text-light); white-space: nowrap; }
 
-    .status-msg { display: none; padding: 10px; border-radius: var(--radius-sm); margin-top: 12px; }
+    .status-msg { display: none; padding: 10px; border-radius: var(--radius-sm); margin-top: 12px; word-break: break-word; }
     .msg-success { background: var(--success-bg); color: var(--success); border: 1px solid #bbf7d0; }
     .msg-error { background: var(--danger-bg); color: var(--danger); border: 1px solid #fecaca; }
     .msg-warning { background: var(--warning-bg); color: var(--warning); border: 1px solid #fde68a; }
 
-    .table-container { overflow-x: auto; }
+    .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { background: var(--bg-subtle); padding: 8px 12px; text-align: left; font-weight: 600; white-space: nowrap; }
     td { padding: 8px 12px; border-bottom: 1px solid var(--bg-subtle); }
     .link-drive { color: var(--primary); text-decoration: none; }
     .link-drive:hover { text-decoration: underline; }
 
-    .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
     .pill-cola { background: var(--bg-subtle); color: var(--text-muted); border: 1px solid var(--border-strong); }
     .pill-generando { background: var(--info-bg); color: var(--primary); border: 1px solid var(--info-border); }
     .pill-ok { background: var(--success-bg); color: var(--success); }
     .pill-cancelado { background: var(--danger-bg); color: var(--danger); }
-    .pill-tipo { background: var(--bg-subtle); border: 1px solid var(--border-strong); color: var(--text-muted); font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+    .pill-tipo { background: var(--bg-subtle); border: 1px solid var(--border-strong); color: var(--text-muted); font-size: 11px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
 
-    .queue-toolbar { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+    .queue-toolbar { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
     .queue-summary { color: var(--text-muted); font-size: 13px; margin-top: 10px; }
     .queue-empty, .placeholder-empty { color: var(--text-light); font-size: 13px; padding: 30px 0; text-align: center; }
 
-    .pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
-    .page-btns { display: flex; gap: 6px; }
+    .pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; flex-wrap: wrap; gap: 10px; }
+    .page-btns { display: flex; gap: 6px; flex-wrap: wrap; }
     .page-btn {
       border: 1px solid var(--border-strong); background: #fff; color: var(--text-muted); padding: 5px 11px;
       border-radius: var(--radius-sm); cursor: pointer; font-size: 13px;
@@ -278,8 +281,51 @@
     .mt-10 { margin-top: 10px; }
     .mb-10 { margin-bottom: 10px; }
     .mt-20 { margin-top: 20px; }
-    .row { display: flex; gap: 10px; }
-    .row > * { flex: 1; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .row > * { flex: 1; min-width: 160px; }
+
+    /* ==========================================
+       RESPONSIVE — TABLET Y MÓVIL
+       ========================================== */
+    .sidebar-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 15;
+    }
+    .sidebar-overlay.show { display: block; }
+
+    @media (max-width: 900px) {
+      .sidebar {
+        position: fixed; top: 60px; left: 0; bottom: 0; z-index: 25;
+        transform: translateX(-100%); box-shadow: var(--shadow-lg); width: 240px; max-width: 80vw;
+        overflow-y: auto;
+      }
+      .sidebar.sidebar-open { transform: translateX(0); }
+      .main-content { padding: 16px; }
+      .topbar { padding: 0 12px; }
+      .topbar-title { font-size: 16px; }
+      .row { flex-direction: column; }
+      .row > * { min-width: 0; }
+    }
+
+    @media (max-width: 640px) {
+      body { font-size: 13px; }
+      .login-card { padding: 28px 20px; }
+      .header h1 { font-size: 19px; }
+      .card { padding: 14px; }
+      .card-header h2 { font-size: 15px; }
+      .stepper { gap: 18px; }
+      .topbar-user .user-details { display: none; }
+      .queue-toolbar { justify-content: stretch; }
+      .queue-toolbar .btn { flex: 1; }
+      table { font-size: 12px; }
+      th, td { padding: 6px 8px; }
+      .pagination { justify-content: center; }
+      .anexo-menu-list { right: auto; left: 0; }
+    }
+
+    @media (max-width: 420px) {
+      .topbar-title { max-width: 140px; }
+      .login-card h2 { font-size: 19px; }
+    }
   </style>
 </head>
 <body>
@@ -315,7 +361,7 @@
 
     <div class="topbar">
       <div class="topbar-left">
-        <button class="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('sidebar-hidden')"><i class="fa-solid fa-bars"></i></button>
+        <button class="hamburger" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
         <span class="topbar-title">Panel Maestro Integrado</span>
       </div>
       <div class="topbar-right">
@@ -334,6 +380,7 @@
     </div>
 
     <div class="dashboard">
+      <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
       <aside class="sidebar">
         <div class="nav-section">
           <div class="nav-label">INICIO</div>
@@ -394,6 +441,9 @@
                 <button class="btn btn-secondary btn-block" onclick="cargarArbol('treeCaratulas', 'C2', 'CARATULAS Y COMPILADOS')">
                   <i class="fa-solid fa-folder-open"></i> Cargar origen (C2)
                 </button>
+                <button class="btn btn-blue btn-block mt-10" onclick="seleccionarTodoArbol('treeCaratulas', this)">
+                  <i class="fa-solid fa-check-double"></i> Seleccionar todo (anexos, carpetas y archivos)
+                </button>
                 <div class="tree-container mt-10"><ul id="treeCaratulas"><li>Esperando carga de carpetas...</li></ul></div>
 
                 <div class="form-group mt-10">
@@ -437,6 +487,9 @@
                   <button class="btn btn-secondary" onclick="cargarArbol('treeCompilador', 'C2', 'CARATULAS Y COMPILADOS')">Cargar directorios</button>
                   <button class="btn btn-blue" onclick="probarServidor('Compilador')">Probar servidor</button>
                 </div>
+                <button class="btn btn-blue btn-block mt-10" onclick="seleccionarTodoArbol('treeCompilador', this)">
+                  <i class="fa-solid fa-check-double"></i> Seleccionar todo (anexos, carpetas y archivos)
+                </button>
                 <div class="tree-container mt-10"><ul id="treeCompilador"><li>Esperando carga de carpetas...</li></ul></div>
 
                 <div class="form-group mt-10">
@@ -462,6 +515,9 @@
                   <button class="btn btn-secondary" onclick="cargarArbol('treeTomos', 'C5', 'TOMOS')">Cargar compilados (C5)</button>
                   <button class="btn btn-blue" onclick="probarServidor('Tomos')">Probar servidor</button>
                 </div>
+                <button class="btn btn-blue btn-block mt-10" onclick="seleccionarTodoArbol('treeTomos', this)">
+                  <i class="fa-solid fa-check-double"></i> Seleccionar todo (anexos, carpetas y archivos)
+                </button>
                 <div class="tree-container mt-10"><ul id="treeTomos"><li>Esperando carga de carpetas...</li></ul></div>
 
                 <div class="form-group mt-10">
@@ -658,6 +714,23 @@
     let historialTomosPagina = 1;
     const HISTORIAL_TOMOS_POR_PAGINA = 5;
 
+    // MENÚ LATERAL RESPONSIVE
+    function toggleSidebar() {
+      const sidebar = document.querySelector('.sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      const isMobile = window.innerWidth <= 900;
+      if (isMobile) {
+        const open = sidebar.classList.toggle('sidebar-open');
+        overlay.classList.toggle('show', open);
+      } else {
+        sidebar.classList.toggle('sidebar-hidden');
+      }
+    }
+    function closeSidebar() {
+      document.querySelector('.sidebar').classList.remove('sidebar-open');
+      document.getElementById('sidebarOverlay').classList.remove('show');
+    }
+
     // LOGIN
     async function handleLogin() {
       const usuario = document.getElementById('username').value.trim();
@@ -748,6 +821,8 @@
       if ((tabName === 'usuarios' || tabName === 'auditoria') && rolActual && rolActual.toLowerCase() !== 'jefe') {
         return;
       }
+
+      if (window.innerWidth <= 900) closeSidebar();
 
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       const navKey = VISTAS_MODULO.includes(tabName) ? tabName : tabName;
@@ -1076,6 +1151,74 @@
       document.getElementById('bloqueNumeracionManual').style.display = checked ? 'block' : 'none';
     }
 
+    // SELECCIÓN POR RANGO CON SHIFT+CLIC (carpetas y PDFs del árbol)
+    const ultimoCheckPorArbol = {};
+
+    document.addEventListener('click', manejarClickCheckboxArbol);
+
+    function manejarClickCheckboxArbol(event) {
+      const chk = event.target;
+      if (!(chk instanceof HTMLInputElement) || chk.type !== 'checkbox') return;
+      if (!chk.classList.contains('folder-chk') && !chk.classList.contains('pdf-chk')) return;
+
+      const contenedor = chk.closest('.tree-container');
+      if (!contenedor) return;
+      const treeId = contenedor.querySelector('ul[id]')?.id;
+      if (!treeId) return;
+
+      const ultimo = ultimoCheckPorArbol[treeId];
+
+      if (event.shiftKey && ultimo && contenedor.contains(ultimo)) {
+        const todos = Array.from(contenedor.querySelectorAll('.folder-chk, .pdf-chk'));
+        const idxActual = todos.indexOf(chk);
+        const idxUltimo = todos.indexOf(ultimo);
+        if (idxActual !== -1 && idxUltimo !== -1) {
+          const [inicio, fin] = idxActual < idxUltimo ? [idxActual, idxUltimo] : [idxUltimo, idxActual];
+          const estado = chk.checked;
+          for (let i = inicio; i <= fin; i++) {
+            todos[i].checked = estado;
+          }
+        }
+      }
+
+      ultimoCheckPorArbol[treeId] = chk;
+      actualizarContadorPaginas();
+    }
+
+    // SELECCIONAR TODO EL ÁRBOL (botón superior: anexos, carpetas, subcarpetas y archivos)
+    async function seleccionarTodoArbol(treeId, btnEl) {
+      const ul = document.getElementById(treeId);
+      if (!ul || !ul.children.length) return;
+
+      if (btnEl) { btnEl.disabled = true; btnEl.dataset.textoOriginal = btnEl.innerHTML; btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Seleccionando todo...'; }
+
+      try {
+        await seleccionarTodoRecursivo(ul, true);
+      } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = btnEl.dataset.textoOriginal; }
+      }
+
+      actualizarContadorPaginas();
+    }
+
+    async function seleccionarTodoRecursivo(ul, mostrarPdfs) {
+      ul.querySelectorAll(':scope > li.pdf-item > label > .pdf-chk').forEach(chk => { chk.checked = true; });
+
+      const lis = Array.from(ul.children).filter(li => li.querySelector(':scope > .folder-node > label > .folder-chk'));
+      for (const li of lis) {
+        const chk = li.querySelector(':scope > .folder-node > label > .folder-chk');
+        const toggle = li.querySelector(':scope > .folder-node > .folder-toggle');
+        const carpeta = { id: chk.value, name: chk.getAttribute('data-name') };
+
+        chk.checked = true;
+
+        const subUl = await asegurarCarpetaExpandida(li, toggle, carpeta, mostrarPdfs);
+        if (subUl) {
+          await seleccionarTodoRecursivo(subUl, mostrarPdfs);
+        }
+      }
+    }
+
     // SELECCIÓN POR CAPAS (ANEXOS)
     const anexoAnalisisCache = {};
 
@@ -1287,11 +1430,32 @@
 
     // COLA DE SOLICITUDES
     function agregarSolicitud(tipo, origen, destino) {
-      const item = { id: ++colaSeq, tipo, origen, destino, estado: 'En cola', hora: '-' };
+      const item = { id: ++colaSeq, tipo, origen, destino, estado: 'En cola', hora: '-', archivoIds: [] };
       colaSolicitudes.unshift(item);
       actualizarBadgesCola();
       renderCola();
       return item.id;
+    }
+
+    function adjuntarPorOrigen(idsSolicitud, origenes, archivosGenerados) {
+      if (!archivosGenerados || !archivosGenerados.length) return;
+      archivosGenerados.forEach(a => {
+        const idx = origenes.indexOf(a.origen);
+        const targetId = idx !== -1 ? idsSolicitud[idx] : null;
+        if (targetId && a.id) {
+          const item = colaSolicitudes.find(s => s.id === targetId);
+          if (item) item.archivoIds.push(a.id);
+        }
+      });
+    }
+
+    function adjuntarATodos(idsSolicitud, archivosGenerados) {
+      if (!archivosGenerados || !archivosGenerados.length) return;
+      const ids = archivosGenerados.map(a => a.id).filter(Boolean);
+      idsSolicitud.forEach(id => {
+        const item = colaSolicitudes.find(s => s.id === id);
+        if (item) item.archivoIds = item.archivoIds.concat(ids);
+      });
     }
 
     function actualizarEstadoSolicitud(id, estado) {
@@ -1349,18 +1513,33 @@
       document.querySelectorAll('.cola-chk').forEach(chk => chk.checked = true);
     }
 
-    function cancelarTodoCola() {
+    async function cancelarTodoCola() {
       const seleccionados = Array.from(document.querySelectorAll('.cola-chk:checked')).map(chk => Number(chk.getAttribute('data-id')));
       const idsAActuar = seleccionados.length ? seleccionados : colaSolicitudes.map(s => s.id);
-      idsAActuar.forEach(id => {
+
+      for (const id of idsAActuar) {
         const item = colaSolicitudes.find(s => s.id === id);
-        if (!item) return;
+        if (!item || item.estado === 'Cancelada') continue;
+
         if (item.estado === 'En cola' || item.estado === 'Generando...') {
           actualizarEstadoSolicitud(id, 'Cancelada');
-        } else {
-          colaSolicitudes = colaSolicitudes.filter(s => s.id !== id);
+          continue;
         }
-      });
+
+        // Ya se había generado el archivo: hay que borrarlo de Drive antes de marcar como cancelada
+        if (item.archivoIds && item.archivoIds.length) {
+          try {
+            const res = await callBackend('wEliminarArchivosGenerados', usuarioActual, item.archivoIds);
+            registrarResultado(res.errores ? 'warn' : 'ok', `[${item.origen}] ${res.mensaje}`);
+            item.archivoIds = [];
+          } catch (err) {
+            registrarResultado('error', `[${item.origen}] No se pudo eliminar el archivo de Drive: ${err.message}`);
+          }
+        }
+
+        actualizarEstadoSolicitud(id, 'Cancelada');
+      }
+
       actualizarBadgesCola();
       renderCola();
     }
@@ -1372,6 +1551,7 @@
       const soloCarpetas = document.getElementById('soloCarpetasCheck').checked;
       const idPlantilla = document.getElementById('selectPlantilla').value;
       if (!soloCarpetas && !idPlantilla) return alert('Seleccione plantilla');
+
       const ubicacion = {
         tipo: document.querySelector('input[name="saveType"]:checked').value,
         soloCarpetas,
@@ -1382,17 +1562,88 @@
         tipo: document.querySelector('input[name="tipoCaratula"]:checked').value
       };
 
+      // IMPORTANTE: una única ejecución de Apps Script no debe procesar
+      // las 80/100 carpetas de golpe. La generación de una carátula implica
+      // varias operaciones de Drive + Docs/Slides + exportación a PDF y puede
+      // superar el tiempo máximo de una ejecución. Procesamos lotes pequeños
+      // y secuenciales; cada lote es una ejecución independiente.
+      const TAMANO_LOTE = 5;
+      const total = seleccionados.length;
       const idsSolicitud = seleccionados.map(s => agregarSolicitud('CARÁTULA', s.name, 'Carátulas base'));
       idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generando...'));
 
-      showWarning('statusCaratulas', 'Procesando carátulas...');
+      let totalProcesados = 0;
+      let totalCreados = 0;
+      let totalOmitidos = 0;
+      let totalErrores = 0;
+      let huboError = false;
+
+      setBusy('action-car', true);
+      showWarning('statusCaratulas', `Procesando 0 de ${total} carátulas...`);
+
       try {
-        const res = await callBackend('wProcesarSeleccionados', usuarioActual, seleccionados, ubicacion, caratula);
-        showSuccess('statusCaratulas', res.mensaje);
-        idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generado'));
+        for (let inicio = 0; inicio < total; inicio += TAMANO_LOTE) {
+          const lote = seleccionados.slice(inicio, inicio + TAMANO_LOTE);
+          const idsLote = idsSolicitud.slice(inicio, inicio + TAMANO_LOTE);
+          const origenesLote = lote.map(s => s.name);
+
+          showWarning(
+            'statusCaratulas',
+            `Procesando ${inicio + 1}-${Math.min(inicio + TAMANO_LOTE, total)} de ${total} carátulas...`
+          );
+
+          const res = await callBackend(
+            'wProcesarSeleccionados',
+            usuarioActual,
+            lote,
+            ubicacion,
+            caratula
+          );
+
+          totalProcesados += Number(res?.procesados || 0);
+          totalCreados += Number(res?.pdfsCreados || 0);
+          totalOmitidos += Number(res?.omitidos || 0);
+
+          if (Array.isArray(res?.errores)) {
+            totalErrores += res.errores.length;
+          }
+
+          const generados = Array.isArray(res?.archivosGenerados) ? res.archivosGenerados : [];
+          adjuntarPorOrigen(idsLote, origenesLote, generados);
+
+          // En éxito parcial, marcamos cada solicitud con el resultado de
+          // su lote. Los errores concretos permanecen en el log de auditoría.
+          if (Array.isArray(res?.errores) && res.errores.length) {
+            huboError = true;
+          }
+
+          idsLote.forEach(id => actualizarEstadoSolicitud(id, 'Generado'));
+        }
+
+        const estadoFinal = totalErrores ? 'partial' : 'success';
+        const mensaje = `${estadoFinal === 'partial' ? '⚠️' : '✅'} Proceso terminado. ` +
+          `Carpetas procesadas: ${totalProcesados}/${total} | ` +
+          `PDF creados: ${totalCreados} | Omitidos: ${totalOmitidos} | Errores: ${totalErrores}`;
+
+        if (estadoFinal === 'partial') {
+          showWarning('statusCaratulas', mensaje);
+        } else {
+          showSuccess('statusCaratulas', mensaje);
+        }
       } catch (err) {
-        showError('statusCaratulas', err.message);
-        idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Cancelada'));
+        huboError = true;
+        showError(
+          'statusCaratulas',
+          `❌ Error después de procesar ${totalProcesados}/${total}: ${err.message}`,
+          true
+        );
+        // Las solicitudes que todavía no se procesaron quedan en cola para
+        // que el usuario pueda distinguirlas de las que sí terminaron.
+        for (let i = totalProcesados; i < idsSolicitud.length; i++) {
+          actualizarEstadoSolicitud(idsSolicitud[i], 'Cancelada');
+        }
+      } finally {
+        setBusy('action-car', false);
       }
     }
 
@@ -1405,6 +1656,7 @@
       try {
         const res = await callBackend('wRestaurarCaratulasBase', usuarioActual, idPlantilla, document.querySelector('input[name="tipoCaratula"]:checked').value);
         showSuccess('statusCaratulas', res.mensaje);
+        adjuntarATodos([idSolicitud], res.archivosGenerados);
         actualizarEstadoSolicitud(idSolicitud, 'Generado');
       } catch (err) {
         showError('statusCaratulas', err.message);
@@ -1428,6 +1680,7 @@
     async function ejecutarCompilacion() {
       const seleccionados = obtenerSeleccionados('treeCompilador');
       if (!seleccionados.length) return alert('Seleccione carpetas');
+      const origenes = seleccionados.map(s => s.name);
 
       const idsSolicitud = seleccionados.map(s => agregarSolicitud('COMPILADO', s.name, 'Compilados'));
       idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generando...'));
@@ -1438,6 +1691,7 @@
           duplicados: document.getElementById('politicaDuplicados').value
         });
         showSuccess('statusCompilador', res.mensaje);
+        adjuntarPorOrigen(idsSolicitud, origenes, res.archivosGenerados);
         idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generado'));
         if (res.pendientes) setTimeout(() => consultarPendientesCompilador(), 3000);
       } catch (err) {
@@ -1451,6 +1705,13 @@
       try {
         const res = await callBackend('consultarCompilacionesPendientes');
         showSuccess('statusCompilador', res.mensaje);
+        if (res.archivosGenerados && res.archivosGenerados.length) {
+          res.archivosGenerados.forEach(a => {
+            const item = colaSolicitudes.find(s => s.tipo === 'COMPILADO' && s.origen === a.origen);
+            if (item && a.id) item.archivoIds.push(a.id);
+          });
+          renderCola();
+        }
       } catch (err) {
         showError('statusCompilador', err.message);
       }
@@ -1483,6 +1744,7 @@
         else if (tipo === 'caratulas') res = await callBackend('wHerramienta2_Caratulas', usuarioActual, seleccionados, config);
         else if (tipo === 'fusionar') res = await callBackend('wHerramienta3_GenerarTomos', usuarioActual, seleccionados, config);
         showSuccess('statusTomos', res.mensaje);
+        if (tipo !== 'calcular') adjuntarATodos(idsSolicitud, res.archivosGenerados);
         idsSolicitud.forEach(id => actualizarEstadoSolicitud(id, 'Generado'));
         if (tipo === 'fusionar' && res.pendientes) setTimeout(() => consultarPendientesTomos(), 3000);
       } catch (err) {
@@ -1496,6 +1758,13 @@
       try {
         const res = await callBackend('consultarTomosPendientes');
         showSuccess('statusTomos', res.mensaje);
+        if (res.archivosGenerados && res.archivosGenerados.length) {
+          const ids = res.archivosGenerados.map(a => a.id).filter(Boolean);
+          colaSolicitudes
+            .filter(s => s.tipo !== 'CARÁTULA' && s.tipo !== 'COMPILADO' && s.estado === 'Generando...')
+            .forEach(item => { item.archivoIds = item.archivoIds.concat(ids); });
+          renderCola();
+        }
       } catch (err) {
         showError('statusTomos', err.message);
       }
@@ -1670,6 +1939,14 @@
         '\nLink: ' + (fila[4] || '-')
       );
     }
+
+    // Cerrar el sidebar automáticamente si se cambia a vista de escritorio
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 900) {
+        document.querySelector('.sidebar')?.classList.remove('sidebar-open');
+        document.getElementById('sidebarOverlay')?.classList.remove('show');
+      }
+    });
   </script>
 </body>
 </html>
