@@ -1,745 +1,1338 @@
 // ====================================================================
-// 🛠️ FUNCIONES AUXILIARES COMPARTIDAS - ÚNICA FUENTE
+
+// 📄 MÓDULO 1: GENERACIÓN Y RESTAURACIÓN DE CARÁTULAS
+
 // ====================================================================
 
-var CONFIG_SISTEMA = Object.freeze({
-  HOJA_COMPILADOS: 'CARATULAS Y COMPILADOS',
-  HOJA_TOMOS: 'TOMOS',
-  LIMITE_PAGINAS: 500,
-  LIMITE_MINIMO_TOMO: 0,
-  PETICIONES_PARALELAS: 2,
-  MODO_ESTRICTO_COMPILADOR: true,
-  MODO_ESTRICTO_TOMOS: true,
-  VALIDAR_PROYECCION_TOMOS: true,
-  MAX_CAMBIOS_PROYECCION_MOSTRAR: 8,
-  CLAVE_SERVIDOR: '',
-  CARATULAS_NO_FOLIADAS_POR_TOMO: 1,
-  CARPETA_INDICES_TOMOS: 'ÍNDICES DE TOMOS',
-  CARPETA_TOMOS_FINALES: 'TOMOS FINALES',
-  INTERVALO_CONSULTA_TOMOS_MS: 2500,
-  TIEMPO_MAX_ESPERA_TOMOS_MS: 270000
-});
 
-function obtenerHojaSegura(nombreHoja) {
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = spreadsheet.getSheetByName(nombreHoja);
-  if (!sheet) {
-    throw new Error("No se encontró la pestaña '" + nombreHoja + "'. Verifica el nombre.");
-  }
-  return sheet;
-}
 
-function extraerIdDeCeldaSegura(nombreHoja, celda) {
-  var sheet = obtenerHojaSegura(nombreHoja);
-  var range = sheet.getRange(celda);
-  var candidatos = [];
-  var richText = range.getRichTextValue();
+function obtenerModelosDeCaratula(nombreHoja) {
 
-  if (richText) {
-    var runs = richText.getRuns();
-    for (var i = 0; i < runs.length; i++) {
-      var link = runs[i].getLinkUrl();
-      if (link) candidatos.push(link);
+  var hoja = nombreHoja || CONFIG_SISTEMA.HOJA_COMPILADOS;
+
+  var id = extraerIdDeCeldaSegura(hoja, 'C3');
+
+
+
+  if (!id) return [{ id: '', name: '⚠️ Enlace inválido o vacío en C3' }];
+
+
+
+  try {
+
+    var carpeta = DriveApp.getFolderById(id);
+
+    var archivos = carpeta.getFiles();
+
+    var modelos = [];
+
+
+
+    while (archivos.hasNext()) {
+
+      var archivo = archivos.next();
+
+      if (esMimePlantillaValido(archivo.getMimeType())) {
+
+        modelos.push({ id: archivo.getId(), name: archivo.getName() });
+
+      }
+
     }
+
+
+
+    modelos.sort(function(a, b) {
+
+      return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
+
+    });
+
+
+
+    return modelos.length ? modelos : [{ id: '', name: '⚠️ La carpeta no contiene Google Docs ni Google Slides' }];
+
+  } catch (errorCarpeta) {
+
+    try {
+
+      var archivoDirecto = DriveApp.getFileById(id);
+
+      if (!esMimePlantillaValido(archivoDirecto.getMimeType())) {
+
+        return [{ id: '', name: '⚠️ C3 no apunta a un Google Docs o Google Slides' }];
+
+      }
+
+      return [{ id: archivoDirecto.getId(), name: archivoDirecto.getName() }];
+
+    } catch (errorArchivo) {
+
+      return [{ id: '', name: '⚠️ No se pudo leer C3: ' + errorArchivo.message }];
+
+    }
+
   }
 
-  var formula = range.getFormula();
-  if (formula) candidatos.push(formula);
-
-  var display = range.getDisplayValue();
-  if (display) candidatos.push(display);
-
-  var rawValue = range.getValue();
-  if (rawValue !== null && rawValue !== undefined) candidatos.push(String(rawValue));
-
-  for (var c = 0; c < candidatos.length; c++) {
-    var id = extraerIdGoogle_(candidatos[c]);
-    if (id) return id;
-  }
-
-  return null;
 }
 
-function extraerIdGoogle_(contenido) {
-  if (!contenido) return null;
-  var texto = String(contenido).trim();
-  if (!texto) return null;
 
-  var patrones = [
-    /\/folders\/([A-Za-z0-9_-]{20,})/,
-    /\/d\/([A-Za-z0-9_-]{20,})/,
-    /[?&]id=([A-Za-z0-9_-]{20,})/,
-    /HYPERLINK\s*\(\s*["'].*?([A-Za-z0-9_-]{20,})/i
+
+// ====================================================================
+// ♻️ BIBLIOTECA CENTRAL DE CARÁTULAS
+// ====================================================================
+// C4 es la biblioteca única de carátulas. Se indexan los PDFs una sola
+// vez por ejecución. Si otro usuario ya generó una carátula, se reutiliza
+// el mismo archivo y no se crea otra carpeta/copia.
+// ====================================================================
+function construirIndiceCaratulasCompartidas_(carpetaRaiz) {
+  var indice = {};
+  function recorrer(folder) {
+    var archivos = folder.getFilesByType(MimeType.PDF);
+    while (archivos.hasNext()) {
+      var archivo = archivos.next();
+      var clave = normalizarTexto(String(archivo.getName() || '').trim());
+      if (clave && !indice[clave]) indice[clave] = archivo;
+    }
+    var subcarpetas = folder.getFolders();
+    while (subcarpetas.hasNext()) recorrer(subcarpetas.next());
+  }
+  recorrer(carpetaRaiz);
+  return indice;
+}
+
+function obtenerCaratulaCompartidaPorNombre_(indice, nombreArchivo) {
+  var clave = normalizarTexto(String(nombreArchivo || '').trim());
+  return clave && indice ? (indice[clave] || null) : null;
+}
+
+function procesarSeleccionados(lote, configUbicacion, configCaratula) {
+
+  if (!Array.isArray(lote) || !lote.length) {
+
+    throw new Error('No se recibieron carpetas para procesar.');
+
+  }
+
+
+
+  var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
+
+  var idOrigen = obtenerIdDesdeHoja('C2', nombreHoja);
+
+  var idDestino = obtenerIdDesdeHoja('C4', nombreHoja);
+
+  var ubicacion = configUbicacion || {};
+
+  var caratula = configCaratula || {};
+
+  var soloCarpetas = Boolean(ubicacion.soloCarpetas);
+
+  var tipo = caratula.tipo === 'nueva' ? 'nueva' : 'original';
+
+  var archivoPlantilla = null;
+
+
+
+  if (!soloCarpetas) {
+
+    var idPlantilla = caratula.idPlantilla ||
+
+      extraerIdDeCeldaSegura(nombreHoja, 'C3');
+
+    archivoPlantilla = obtenerArchivoPlantillaDesdeId(idPlantilla);
+
+  }
+
+
+
+  var destinoRaiz = DriveApp.getFolderById(idDestino);
+
+  var cacheCarpetas = {};
+
+  var indiceCaratulasCompartidas = soloCarpetas ? {} : construirIndiceCaratulasCompartidas_(destinoRaiz);
+
+  var logs = [];
+
+  var resultado = {
+
+    status: 'success',
+
+    procesados: 0,
+
+    carpetasPreparadas: 0,
+
+    pdfsCreados: 0,
+
+    omitidos: 0,
+
+    errores: [],
+
+    registrosAgregados: 0,
+
+    archivosGenerados: [] // 👈 NUEVO: {origen, id, url, name} de cada PDF creado
+
+  };
+
+
+
+  for (var i = 0; i < lote.length; i++) {
+
+    var item = lote[i];
+
+    resultado.procesados++;
+
+
+
+    try {
+
+      if (!item || !item.id || !item.name) {
+
+        throw new Error('Elemento seleccionado incompleto.');
+
+      }
+
+
+
+      // Nombre de salida; se conserva tal cual viene del elemento seleccionado.
+
+      // ♻️ Reutilizar carátula ya existente en C4 antes de crear carpetas.
+      if (!soloCarpetas) {
+        var caratulaCompartida =
+          obtenerCaratulaCompartidaPorNombre_(
+            indiceCaratulasCompartidas,
+            filenameFinal
+          );
+
+        if (caratulaCompartida) {
+          resultado.omitidos++;
+
+          resultado.archivosGenerados.push({
+            origen: item.name,
+            id: caratulaCompartida.getId(),
+            url: caratulaCompartida.getUrl(),
+            name: caratulaCompartida.getName()
+          });
+
+          logs.push(crearFilaActividadCaratulas_(
+            'Google Apps Script - Carátulas',
+            caratulaCompartida.getName(),
+            '♻️ Carátula maestra reutilizada',
+            caratulaCompartida.getUrl(),
+            caratulaCompartida.getId()
+          ));
+
+          continue;
+        }
+      }
+
+      var carpetaGuardar = destinoRaiz;
+      var ruta = obtenerRutaDesdeOrigen(item.id, idOrigen);
+
+
+
+      if (ubicacion.tipo === 'automatico') {
+
+        for (var r = 0; r < ruta.length; r++) {
+
+          carpetaGuardar = getOrCreateFolder(
+
+            carpetaGuardar,
+
+            ruta[r],
+
+            cacheCarpetas
+
+          );
+
+        }
+
+
+
+        carpetaGuardar = getOrCreateFolder(
+
+          carpetaGuardar,
+
+          item.name,
+
+          cacheCarpetas
+
+        );
+
+      } else {
+
+        var nombreManual = String(
+
+          ubicacion.nombreNuevaCarpeta || ''
+
+        ).trim();
+
+
+
+        if (nombreManual) {
+
+          carpetaGuardar = getOrCreateFolder(
+
+            carpetaGuardar,
+
+            sanitizarNombreArchivo(nombreManual.toUpperCase()),
+
+            cacheCarpetas
+
+          );
+
+        }
+
+      }
+
+
+
+      resultado.carpetasPreparadas++;
+
+
+
+      if (soloCarpetas) {
+
+        logs.push(crearFilaActividadCaratulas_(
+
+          'Google Apps Script - Carátulas',
+
+          'CARPETA: ' + item.name,
+
+          '📁 Carpeta preparada o verificada',
+
+          carpetaGuardar.getUrl(),
+
+          carpetaGuardar.getId()
+
+        ));
+
+        continue;
+
+      }
+
+
+
+      var textoVisual = obtenerTextoVisual(item.name);
+
+      var prefijo = extraerPrefijoAvanzado(item.name);
+
+      var textoLimpio = limpiarTextoSinPrefijoAvanzado(item.name);
+
+      var filenameFinal =
+
+        sanitizarNombreArchivo(item.name.trim().toUpperCase()) + '.PDF';
+
+
+
+      // Conserva las reglas especiales ya usadas en los Anexos 11 y 13.
+
+      if (ruta.length > 0) {
+
+        var primerNivel = normalizarTexto(ruta[0]);
+
+        var esAnexoEspecial =
+
+          primerNivel.indexOf('anexo 11') !== -1 ||
+
+          primerNivel.indexOf('anexo 13') !== -1;
+
+
+
+        if (
+
+          esAnexoEspecial &&
+
+          ruta.length === 1 &&
+
+          textoLimpio.length >= 9
+
+        ) {
+
+          textoLimpio = textoLimpio.slice(-9);
+
+        } else if (
+
+          esAnexoEspecial &&
+
+          ruta.length === 2 &&
+
+          textoLimpio.length > 3
+
+        ) {
+
+          textoLimpio = textoLimpio.substring(3).trim();
+
+        }
+
+      }
+
+
+
+      var existentes = carpetaGuardar.getFilesByName(filenameFinal);
+
+
+
+      if (existentes.hasNext()) {
+
+        var existente = existentes.next();
+
+        resultado.omitidos++;
+
+
+
+        logs.push(crearFilaActividadCaratulas_(
+
+          'Google Apps Script - Carátulas',
+
+          filenameFinal,
+
+          '⏭️ Carátula omitida: ya existía',
+
+          existente.getUrl(),
+
+          existente.getId()
+
+        ));
+
+        continue;
+
+      }
+
+
+
+      var pdfCreado = crearPDFDesdePlantilla_(
+
+        archivoPlantilla,
+
+        textoLimpio,
+
+        prefijo,
+
+        textoVisual,
+
+        filenameFinal,
+
+        carpetaGuardar,
+
+        tipo
+
+      );
+
+
+
+      resultado.pdfsCreados++;
+
+
+
+      resultado.archivosGenerados.push({ // 👈 NUEVO
+
+        origen: item.name,
+
+        id: pdfCreado.id,
+
+        url: pdfCreado.url,
+
+        name: pdfCreado.name
+
+      });
+
+
+
+      logs.push(crearFilaActividadCaratulas_(
+
+        'Google Apps Script - Carátulas',
+
+        pdfCreado.name || filenameFinal,
+
+        '✅ Carátula creada',
+
+        pdfCreado.url,
+
+        pdfCreado.id
+
+      ));
+
+
+
+    } catch (error) {
+
+      var nombreError = item && item.name
+
+        ? String(item.name)
+
+        : 'Sin nombre';
+
+
+
+      resultado.errores.push({
+
+        item: nombreError,
+
+        detalle: error.message
+
+      });
+
+
+
+      logs.push(crearFilaActividadCaratulas_(
+
+        'Google Apps Script - Carátulas',
+
+        nombreError,
+
+        '❌ Error al procesar: ' + error.message,
+
+        '',
+
+        ''
+
+      ));
+
+    }
+
+  }
+
+
+
+  resultado.registrosAgregados = escribirLogsCaratulas_(
+
+    nombreHoja,
+
+    logs
+
+  );
+
+
+
+  if (resultado.errores.length) {
+
+    resultado.status = resultado.pdfsCreados ||
+
+      resultado.carpetasPreparadas
+
+      ? 'partial'
+
+      : 'error';
+
+  }
+
+
+
+  resultado.mensaje = construirMensajeCaratulas_(resultado);
+
+  return resultado;
+
+}
+
+
+
+function construirMensajeCaratulas_(resultado) {
+
+  var partes = [
+
+    'Carpetas procesadas: ' + resultado.procesados,
+
+    'PDF creados: ' + resultado.pdfsCreados,
+
+    'Omitidos por existir: ' + resultado.omitidos,
+
+    'Actividades registradas: ' + Number(resultado.registrosAgregados || 0)
+
   ];
 
-  for (var i = 0; i < patrones.length; i++) {
-    var match = texto.match(patrones[i]);
-    if (match) return match[1];
+
+
+  if (resultado.errores.length) {
+
+    partes.push('Errores: ' + resultado.errores.length);
+
   }
 
-  if (/^[A-Za-z0-9_-]{20,}$/.test(texto)) return texto;
 
-  if (/drive\.google\.com|docs\.google\.com/i.test(texto)) {
-    var generico = texto.match(/([A-Za-z0-9_-]{25,})/);
-    if (generico) return generico[1];
-  }
 
-  return null;
+  return (
+
+    resultado.errores.length
+
+      ? '⚠️ Proceso completado con observaciones. '
+
+      : '✅ Proceso completado. '
+
+  ) + partes.join(' | ');
+
 }
 
-function obtenerIdDesdeHoja(celda, nombreHoja) {
-  var id = extraerIdDeCeldaSegura(nombreHoja, celda);
-  if (!id) {
-    throw new Error('No se encontró un enlace o ID válido en ' + nombreHoja + '!' + celda + '.');
-  }
-  return id;
+
+
+function crearFilaActividadCaratulas_(
+
+  origen,
+
+  archivo,
+
+  estado,
+
+  url,
+
+  id
+
+) {
+
+  return [
+
+    new Date(),
+
+    String(origen || 'Google Apps Script - Carátulas'),
+
+    String(archivo || ''),
+
+    String(estado || ''),
+
+    String(url || ''),
+
+    String(id || '')
+
+  ];
+
 }
 
-function obtenerSubcarpetas(folderId) {
+
+
+function escribirLogsCaratulas_(nombreHoja, filas) {
+
+  if (!Array.isArray(filas) || !filas.length) return 0;
+
+
+
   try {
-    var carpeta = DriveApp.getFolderById(folderId);
-    var iterator = carpeta.getFolders();
-    var lista = [];
 
-    while (iterator.hasNext()) {
-      var sub = iterator.next();
-      lista.push({ id: sub.getId(), name: sub.getName() });
-    }
+    var sheet = obtenerHojaSegura(nombreHoja);
 
-    lista.sort(function(a, b) {
-      return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
-    });
+    var inicio = Math.max(15, sheet.getLastRow() + 1);
 
-    return lista;
+
+
+    sheet.getRange(
+
+      inicio,
+
+      1,
+
+      filas.length,
+
+      6
+
+    ).setValues(filas);
+
+
+
+    return filas.length;
+
   } catch (error) {
-    throw new Error('No se pudo leer la carpeta ' + folderId + ': ' + error.message);
+
+    console.warn(
+
+      'No se pudieron registrar las actividades de carátulas: ' +
+
+      error.message
+
+    );
+
+    return 0;
+
   }
+
 }
 
-function obtenerArchivosPdfDeCarpeta(folderId) {
-  var carpeta = DriveApp.getFolderById(folderId);
-  var files = carpeta.getFilesByType(MimeType.PDF);
-  var lista = [];
 
-  while (files.hasNext()) {
-    var file = files.next();
-    var nombre = file.getName();
-    lista.push({
-      id: file.getId(),
-      name: nombre,
-      paginas: extraerPaginasDelNombre_(nombre)
-    });
-  }
 
-  lista.sort(function(a, b) {
-    return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
-  });
+function crearPDFDesdePlantilla_(
 
-  return lista;
-}
+  archivoPlantilla,
 
-function getOrCreateFolder(parentFolder, name, cache) {
-  var nombre = String(name || '').trim();
-  if (!nombre) throw new Error('Se intentó crear una carpeta sin nombre.');
+  textoLimpio,
 
-  var cacheLocal = cache || {};
-  var cacheKey = parentFolder.getId() + '::' + nombre.toUpperCase();
-  if (cacheLocal[cacheKey]) return DriveApp.getFolderById(cacheLocal[cacheKey]);
+  prefijo,
 
-  var existentes = parentFolder.getFoldersByName(nombre);
-  if (existentes.hasNext()) {
-    var encontrada = existentes.next();
-    cacheLocal[cacheKey] = encontrada.getId();
-    return encontrada;
-  }
+  textoVisual,
 
-  var lock = LockService.getDocumentLock() || LockService.getScriptLock();
-  if (!lock.tryLock(5000)) {
-    throw new Error('No se pudo obtener el bloqueo para crear la carpeta: ' + nombre);
-  }
+  filenameFinal,
+
+  carpetaDestino,
+
+  tipoCaratula
+
+) {
+
+  var textoMayus = String(textoLimpio || '').toUpperCase().trim();
+
+  var visualMayus = String(textoVisual || '').toUpperCase().trim();
+
+  var prefijoMayus = String(prefijo || '').toUpperCase().trim();
+
+
+
+  var temporal = archivoPlantilla.makeCopy(
+
+    'TEMP_' + Utilities.getUuid().slice(0, 8) + '_' + filenameFinal,
+
+    carpetaDestino
+
+  );
+
+
 
   try {
-    existentes = parentFolder.getFoldersByName(nombre);
-    var carpeta = existentes.hasNext() ? existentes.next() : parentFolder.createFolder(nombre);
-    cacheLocal[cacheKey] = carpeta.getId();
-    return carpeta;
-  } finally {
-    lock.releaseLock();
-  }
-}
 
-function normalizarTexto(texto) {
-  if (texto === null || texto === undefined) return '';
-  return String(texto)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
-}
+    var mime = archivoPlantilla.getMimeType();
 
-function simplificar(texto) {
-  return normalizarTexto(texto).replace(/[^a-z0-9]/g, '');
-}
+    var valores = tipoCaratula === 'nueva'
 
-function limpiarNombrePDF(nombre) {
-  if (!nombre) return '';
-  return String(nombre)
-    .replace(/\.pdf$/i, '')
-    .replace(/^(?:anexo\s+\d+(?:\.\d+)*\.?|\d+(?:\.\d+)*\.?)\s*[-–—.:]*\s*/i, '')
-    .trim();
-}
+      ? {
 
-function extraerPrefijoAvanzado(nombre) {
-  if (!nombre) return '';
-  var match = String(nombre).match(/^(anexo\s+\d+(?:\.\d+)*\.?|\d+(?:\.\d+)*\.?)\s*/i);
-  return match ? match[1].trim() : '';
-}
+          YYYY: prefijoMayus,
 
-function limpiarTextoSinPrefijoAvanzado(nombre) {
-  if (!nombre) return '';
-  return String(nombre)
-    .replace(/^(anexo\s+\d+(?:\.\d+)*\.?|\d+(?:\.\d+)*\.?)\s*[-–—.:]*\s*/i, '')
-    .trim();
-}
+          XXXXXX: textoMayus,
 
-function obtenerTextoVisual(nombre) {
-  if (!nombre) return '';
-  var texto = String(nombre).trim();
-  var matchAnexo = texto.match(/^(ANEXO\s*\d+(?:\.\d+)*\.?)\s*[-–—.:]*\s*(.*)/i);
+          XXXXX: textoMayus,
 
-  if (matchAnexo) {
-    return matchAnexo[1].toUpperCase() + (matchAnexo[2] ? '\n' + matchAnexo[2] : '');
-  }
+          XXXX: textoMayus
 
-  var matchNum = texto.match(/^(\d+(?:\.\d+)*\.?)\s*[-–—.:]*\s*(.*)/);
-  return matchNum ? matchNum[2] : texto;
-}
-
-function sanitizarNombreArchivo(nombre) {
-  return String(nombre || '')
-    .replace(/[\\/:*?"<>|]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function obtenerRutaDesdeOrigen(folderId, rootId) {
-  var ruta = [];
-  var actual = DriveApp.getFolderById(folderId);
-  var visitados = {};
-  var encontrado = actual.getId() === rootId;
-
-  while (!encontrado) {
-    if (visitados[actual.getId()]) {
-      break;
-    }
-    visitados[actual.getId()] = true;
-
-    var padres = actual.getParents();
-    if (!padres.hasNext()) break;
-
-    var padre = padres.next();
-    if (padre.getId() === rootId) {
-      encontrado = true;
-      break;
-    }
-
-    ruta.unshift(padre.getName());
-    actual = padre;
-  }
-
-  return ruta;
-}
-
-function filtrarSeleccionadosMasEspecificos(seleccionados) {
-  if (!Array.isArray(seleccionados)) return [];
-
-  var ids = {};
-  seleccionados.forEach(function(item) {
-    if (item && item.id) ids[item.id] = true;
-  });
-
-  var padresSeleccionados = {};
-
-  seleccionados.forEach(function(item) {
-    if (!item || !item.id) return;
-    try {
-      var actual = DriveApp.getFolderById(item.id);
-      var seguridad = 0;
-
-      while (seguridad++ < 100) {
-        var padres = actual.getParents();
-        if (!padres.hasNext()) break;
-        var padre = padres.next();
-        if (ids[padre.getId()]) padresSeleccionados[padre.getId()] = true;
-        actual = padre;
-      }
-    } catch (error) {
-      console.warn('No se pudo verificar la jerarquía de ' + item.id + ': ' + error.message);
-    }
-  });
-
-  return seleccionados.filter(function(item) {
-    return item && item.id && !padresSeleccionados[item.id];
-  });
-}
-
-function listarPdfsRecursivo(carpeta, rutaInicial) {
-  var salida = [];
-
-  function recorrer(folder, ruta) {
-    var files = folder.getFilesByType(MimeType.PDF);
-    while (files.hasNext()) {
-      salida.push({
-        file: files.next(),
-        parentFolder: folder,
-        path: ruta.slice()
-      });
-    }
-
-    var subs = [];
-    var iterator = folder.getFolders();
-    while (iterator.hasNext()) subs.push(iterator.next());
-    subs.sort(function(a, b) {
-      return a.getName().localeCompare(b.getName(), 'es', { numeric: true, sensitivity: 'base' });
-    });
-
-    subs.forEach(function(sub) {
-      recorrer(sub, ruta.concat([sub.getName()]));
-    });
-  }
-
-  recorrer(carpeta, rutaInicial || []);
-  return salida;
-}
-
-// NUEVA FUNCIÓN: listarPdfsHastaNivel
-function listarPdfsHastaNivel(carpeta, rutaInicial, nivelMaximo) {
-  var salida = [];
-
-  function recorrer(folder, ruta, nivelActual) {
-    var files = folder.getFilesByType(MimeType.PDF);
-    while (files.hasNext()) {
-      salida.push({
-        file: files.next(),
-        parentFolder: folder,
-        path: ruta.slice()
-      });
-    }
-
-    if (nivelActual < nivelMaximo) {
-      var subs = [];
-      var iterator = folder.getFolders();
-      while (iterator.hasNext()) subs.push(iterator.next());
-      subs.sort(function(a, b) {
-        return a.getName().localeCompare(b.getName(), 'es', { numeric: true, sensitivity: 'base' });
-      });
-
-      subs.forEach(function(sub) {
-        recorrer(sub, ruta.concat([sub.getName()]), nivelActual + 1);
-      });
-    }
-  }
-
-  recorrer(carpeta, rutaInicial || [], 1);
-  return salida;
-}
-
-function normalizarUrlEndpoint(url, endpoint) {
-  var base = String(url || '').trim();
-  if (!/^https?:\/\//i.test(base)) throw new Error('El enlace del servidor no es una URL HTTP/HTTPS válida.');
-
-  base = base.replace(/\/+$/, '');
-  var sufijo = '/' + String(endpoint || '').replace(/^\/+/, '');
-  var regex = new RegExp(sufijo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
-
-  return regex.test(base) ? base : base + sufijo;
-}
-
-function exportarGoogleWorkspaceAPdf(fileId) {
-  var url = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) +
-    '/export?mimeType=' + encodeURIComponent('application/pdf');
-  var ultimoError = null;
-
-  for (var intento = 1; intento <= 3; intento++) {
-    try {
-      var respuesta = UrlFetchApp.fetch(url, {
-        method: 'get',
-        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-        muteHttpExceptions: true
-      });
-
-      if (respuesta.getResponseCode() === 200) return respuesta.getBlob();
-      ultimoError = new Error('Drive export devolvió HTTP ' + respuesta.getResponseCode() + '.');
-    } catch (error) {
-      ultimoError = error;
-    }
-
-    Utilities.sleep(200 * intento);
-  }
-
-  try {
-    return DriveApp.getFileById(fileId).getAs(MimeType.PDF);
-  } catch (fallbackError) {
-    throw new Error('No se pudo exportar la plantilla a PDF: ' +
-      (ultimoError ? ultimoError.message + ' / ' : '') + fallbackError.message);
-  }
-}
-
-function esMimePlantillaValido(mimeType) {
-  return mimeType === MimeType.GOOGLE_DOCS || mimeType === MimeType.GOOGLE_SLIDES;
-}
-
-function obtenerArchivoPlantillaDesdeId(id) {
-  if (!id) throw new Error('No se proporcionó un ID de plantilla.');
-
-  try {
-    var archivo = DriveApp.getFileById(id);
-    if (!esMimePlantillaValido(archivo.getMimeType())) {
-      throw new Error('La plantilla debe ser un archivo de Google Docs o Google Slides.');
-    }
-    return archivo;
-  } catch (errorArchivo) {
-    try {
-      var carpeta = DriveApp.getFolderById(id);
-      var candidatos = [];
-      var files = carpeta.getFiles();
-
-      while (files.hasNext()) {
-        var file = files.next();
-        if (esMimePlantillaValido(file.getMimeType())) candidatos.push(file);
-      }
-
-      candidatos.sort(function(a, b) {
-        return a.getName().localeCompare(b.getName(), 'es', { numeric: true, sensitivity: 'base' });
-      });
-
-      if (!candidatos.length) {
-        throw new Error('La carpeta de plantillas no contiene Google Docs ni Google Slides.');
-      }
-
-      return candidatos[0];
-    } catch (errorCarpeta) {
-      throw new Error('No se pudo abrir la plantilla: ' + errorCarpeta.message);
-    }
-  }
-}
-
-function parsearJsonSeguro(texto) {
-  try {
-    return JSON.parse(texto || '{}');
-  } catch (error) {
-    return null;
-  }
-}
-
-function escaparRegex(texto) {
-  return String(texto || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function verificarServidor(nombreHoja, celda) {
-  var sheet = obtenerHojaSegura(nombreHoja);
-  var base = sheet.getRange(celda).getDisplayValue().trim();
-  if (!base) throw new Error('No hay URL configurada en ' + nombreHoja + '!' + celda + '.');
-
-  base = base.replace(/\/(compilar|tomos|health)\/?$/i, '').replace(/\/+$/, '');
-  var respuesta = UrlFetchApp.fetch(base + '/health', {
-    method: 'get',
-    headers: { 'ngrok-skip-browser-warning': 'true' },
-    muteHttpExceptions: true
-  });
-
-  var data = parsearJsonSeguro(respuesta.getContentText());
-  if (respuesta.getResponseCode() !== 200 || !data || data.status !== 'ok') {
-    throw new Error('El servidor no respondió correctamente. HTTP ' + respuesta.getResponseCode() + '.');
-  }
-
-  return { status: 'success', mensaje: '✅ Servidor activo y disponible.' };
-}
-
-function ejecutarFetchAllPorBloques_(solicitudes, tamanoBloque) {
-  if (!Array.isArray(solicitudes)) {
-    throw new Error('Las solicitudes HTTP deben recibirse como un arreglo.');
-  }
-
-  if (!solicitudes.length) return [];
-
-  var limite = parseInt(tamanoBloque, 10);
-  if (isNaN(limite) || limite < 1) limite = 1;
-
-  var respuestas = [];
-
-  for (var inicio = 0; inicio < solicitudes.length; inicio += limite) {
-    var bloque = solicitudes.slice(inicio, inicio + limite);
-
-    try {
-      var respuestasBloque = UrlFetchApp.fetchAll(bloque);
-
-      if (!respuestasBloque || respuestasBloque.length !== bloque.length) {
-        throw new Error(
-          'UrlFetchApp.fetchAll devolvió una cantidad inesperada de respuestas.'
-        );
-      }
-
-      respuestas = respuestas.concat(respuestasBloque);
-
-    } catch (errorBloque) {
-      for (var i = 0; i < bloque.length; i++) {
-        try {
-          respuestas.push(ejecutarSolicitudHttpIndividual_(bloque[i]));
-        } catch (errorIndividual) {
-          respuestas.push(
-            crearRespuestaHttpSintetica_(
-              599,
-              'Fallo de red al ejecutar la solicitud ' +
-              (inicio + i + 1) +
-              ': ' +
-              errorIndividual.message +
-              ' | Error inicial del bloque: ' +
-              errorBloque.message
-            )
-          );
         }
-      }
+
+      : {
+
+          XXXXXX: visualMayus,
+
+          XXXXX: visualMayus,
+
+          XXXX: visualMayus
+
+        };
+
+
+
+    if (mime === MimeType.GOOGLE_SLIDES) {
+
+      editarPlantillaSlides_(
+
+        temporal.getId(),
+
+        valores,
+
+        [textoMayus, visualMayus, prefijoMayus]
+
+      );
+
+    } else if (mime === MimeType.GOOGLE_DOCS) {
+
+      editarPlantillaDocs_(
+
+        temporal.getId(),
+
+        valores,
+
+        [textoMayus, visualMayus, prefijoMayus]
+
+      );
+
+    } else {
+
+      throw new Error(
+
+        'La plantilla debe ser Google Docs o Google Slides.'
+
+      );
+
     }
+
+
+
+    var pdfBlob = exportarGoogleWorkspaceAPdf(temporal.getId());
+
+    pdfBlob.setName(filenameFinal);
+
+
+
+    // Crea la versión nueva y conserva un solo PDF activo con ese nombre.
+
+    var archivoCreado = crearArchivoSinDuplicados_(
+
+      carpetaDestino,
+
+      pdfBlob,
+
+      filenameFinal
+
+    );
+
+
+
+    return {
+
+      id: archivoCreado.getId(),
+
+      url: archivoCreado.getUrl(),
+
+      name: archivoCreado.getName()
+
+    };
+
+
+
+  } finally {
+
+    try {
+
+      temporal.setTrashed(true);
+
+    } catch (errorTrash) {
+
+      console.warn(
+
+        'No se pudo enviar a la papelera el temporal ' +
+
+        temporal.getId() + ': ' + errorTrash.message
+
+      );
+
+    }
+
   }
 
-  return respuestas;
 }
 
-function ejecutarSolicitudHttpIndividual_(solicitud) {
-  if (!solicitud || !solicitud.url) {
-    throw new Error('La solicitud HTTP no contiene una URL válida.');
+
+
+function editarPlantillaSlides_(fileId, valores, textosInsertados) {
+
+  var presentacion = SlidesApp.openById(fileId);
+
+
+
+  Object.keys(valores).forEach(function(marcador) {
+
+    presentacion.replaceAllText(marcador, valores[marcador] || '');
+
+  });
+
+
+
+  var buscados = textosInsertados.filter(function(texto) { return Boolean(texto); });
+
+  var slides = presentacion.getSlides();
+
+
+
+  for (var i = 0; i < slides.length; i++) {
+
+    var elementos = slides[i].getPageElements();
+
+
+
+    for (var j = 0; j < elementos.length; j++) {
+
+      try {
+
+        if (elementos[j].getPageElementType() === SlidesApp.PageElementType.SHAPE) {
+
+          centrarTextRangeSlidesSiCoincide_(elementos[j].asShape().getText(), buscados);
+
+        } else if (elementos[j].getPageElementType() === SlidesApp.PageElementType.TABLE) {
+
+          var tabla = elementos[j].asTable();
+
+          for (var r = 0; r < tabla.getNumRows(); r++) {
+
+            for (var c = 0; c < tabla.getNumColumns(); c++) {
+
+              centrarTextRangeSlidesSiCoincide_(tabla.getCell(r, c).getText(), buscados);
+
+            }
+
+          }
+
+        }
+
+      } catch (errorElemento) {
+
+        console.warn('Elemento de Slides omitido: ' + errorElemento.message);
+
+      }
+
+    }
+
   }
 
-  var opciones = {};
 
-  Object.keys(solicitud).forEach(function(clave) {
-    if (clave !== 'url') opciones[clave] = solicitud[clave];
-  });
 
-  return UrlFetchApp.fetch(solicitud.url, opciones);
+  presentacion.saveAndClose();
+
 }
 
-function crearRespuestaHttpSintetica_(codigo, detalle) {
-  var body = JSON.stringify({
-    status: 'error',
-    detail: String(detalle || 'Error HTTP no especificado.')
+
+
+function centrarTextRangeSlidesSiCoincide_(textRange, buscados) {
+
+  var contenido = textRange.asString();
+
+  var coincide = buscados.some(function(texto) { return contenido.indexOf(texto) !== -1; });
+
+  if (!coincide) return;
+
+
+
+  var parrafos = textRange.getParagraphs();
+
+  for (var p = 0; p < parrafos.length; p++) {
+
+    parrafos[p].getRange().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+
+  }
+
+}
+
+
+
+function editarPlantillaDocs_(fileId, valores, textosInsertados) {
+
+  var doc = DocumentApp.openById(fileId);
+
+  var secciones = [doc.getBody(), doc.getHeader(), doc.getFooter()].filter(function(seccion) { return Boolean(seccion); });
+
+
+
+  secciones.forEach(function(seccion) {
+
+    Object.keys(valores).forEach(function(marcador) {
+
+      seccion.replaceText(escaparRegex(marcador), valores[marcador] || '');
+
+    });
+
+    centrarSeccionDocs_(seccion, textosInsertados);
+
   });
+
+
+
+  doc.saveAndClose();
+
+}
+
+
+
+function centrarSeccionDocs_(seccion, textosInsertados) {
+
+  var buscados = textosInsertados.filter(function(texto) { return Boolean(texto); });
+
+  if (!buscados.length || !seccion.getParagraphs) return;
+
+
+
+  var parrafos = seccion.getParagraphs();
+
+  for (var i = 0; i < parrafos.length; i++) {
+
+    var texto = parrafos[i].getText();
+
+    if (buscados.some(function(buscado) { return texto.indexOf(buscado) !== -1; })) {
+
+      parrafos[i].setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+    }
+
+  }
+
+
+
+  if (!seccion.getTables) return;
+
+  var tablas = seccion.getTables();
+
+  for (var t = 0; t < tablas.length; t++) {
+
+    for (var r = 0; r < tablas[t].getNumRows(); r++) {
+
+      var fila = tablas[t].getRow(r);
+
+      for (var c = 0; c < fila.getNumCells(); c++) {
+
+        var celda = fila.getCell(c);
+
+        var coincide = buscados.some(function(buscado) { return celda.getText().indexOf(buscado) !== -1; });
+
+        if (coincide) {
+
+          var ps = celda.getParagraphs();
+
+          for (var p = 0; p < ps.length; p++) ps[p].setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+        }
+
+      }
+
+    }
+
+  }
+
+}
+
+
+
+function crearCarpetaLibre(nombreCarpeta) {
+
+  var nombre = sanitizarNombreArchivo(
+
+    String(nombreCarpeta || '').trim().toUpperCase()
+
+  );
+
+
+
+  if (!nombre) {
+
+    throw new Error('El nombre de la carpeta está vacío.');
+
+  }
+
+
+
+  var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
+
+  var idDestino = obtenerIdDesdeHoja('C4', nombreHoja);
+
+  var carpeta = getOrCreateFolder(
+
+    DriveApp.getFolderById(idDestino),
+
+    nombre,
+
+    {}
+
+  );
+
+
+
+  escribirLogsCaratulas_(nombreHoja, [
+
+    crearFilaActividadCaratulas_(
+
+      'Google Apps Script - Carátulas',
+
+      'CARPETA: ' + nombre,
+
+      '📁 Carpeta creada o verificada',
+
+      carpeta.getUrl(),
+
+      carpeta.getId()
+
+    )
+
+  ]);
+
+
 
   return {
-    getResponseCode: function() {
-      return Number(codigo) || 599;
-    },
-    getContentText: function() {
-      return body;
-    },
-    getHeaders: function() {
-      return {};
-    }
-  };
-}
 
-function obtenerValorConfigSistema_(clave, valorPredeterminado) {
-  try {
-    if (
-      typeof CONFIG_SISTEMA !== 'undefined' &&
-      CONFIG_SISTEMA &&
-      CONFIG_SISTEMA[clave] !== undefined &&
-      CONFIG_SISTEMA[clave] !== null &&
-      CONFIG_SISTEMA[clave] !== ''
-    ) {
-      return CONFIG_SISTEMA[clave];
-    }
-  } catch (error) {
-    // Se utiliza el valor predeterminado.
-  }
+    status: 'success',
 
-  return valorPredeterminado;
-}
+    carpetaId: carpeta.getId(),
 
-function formatearNumeroMinimo_(valor, minimoDigitos) {
-  var numero = Math.max(0, parseInt(valor, 10) || 0);
-  var ancho = Math.max(1, parseInt(minimoDigitos, 10) || 1);
-  var texto = String(numero);
+    carpetaUrl: carpeta.getUrl(),
 
-  while (texto.length < ancho) texto = '0' + texto;
-  return texto;
-}
+    mensaje: '✅ Carpeta creada o encontrada correctamente.'
 
-function listarArchivosExactos_(carpeta, nombreArchivo) {
-  var salida = [];
-  var iterator = carpeta.getFilesByName(String(nombreArchivo || ''));
-
-  while (iterator.hasNext()) {
-    var archivo = iterator.next();
-    if (!archivo.isTrashed()) salida.push(archivo);
-  }
-
-  salida.sort(function(a, b) {
-    return b.getDateCreated().getTime() - a.getDateCreated().getTime();
-  });
-
-  return salida;
-}
-
-function eliminarDuplicadosNombreExcepto_(carpeta, nombreArchivo, fileIdConservar) {
-  var archivos = listarArchivosExactos_(carpeta, nombreArchivo);
-  var eliminados = 0;
-
-  archivos.forEach(function(archivo) {
-    if (archivo.getId() === fileIdConservar) return;
-
-    try {
-      archivo.setTrashed(true);
-      eliminados++;
-    } catch (error) {
-      console.warn(
-        'No se pudo enviar a la papelera el duplicado ' +
-        archivo.getName() + ': ' + error.message
-      );
-    }
-  });
-
-  return eliminados;
-}
-
-function crearArchivoSinDuplicados_(carpeta, blob, nombreArchivo) {
-  if (!carpeta) throw new Error('No se indicó la carpeta de destino.');
-  if (!blob) throw new Error('No se recibió el contenido del archivo.');
-
-  var nombre = sanitizarNombreArchivo(nombreArchivo);
-  if (!/\.pdf$/i.test(nombre)) nombre += '.pdf';
-
-  blob.setName(nombre);
-
-  var nuevo = carpeta.createFile(blob);
-  eliminarDuplicadosNombreExcepto_(carpeta, nombre, nuevo.getId());
-  return nuevo;
-}
-
-function guardarEstadoJsonFragmentado_(claveBase, objeto) {
-  var propiedades = PropertiesService.getDocumentProperties();
-  eliminarEstadoJsonFragmentado_(claveBase);
-
-  var contenido = JSON.stringify(objeto || {});
-  var tamano = 7000;
-  var fragmentos = Math.max(1, Math.ceil(contenido.length / tamano));
-  var valores = {};
-
-  for (var i = 0; i < fragmentos; i++) {
-    valores[claveBase + '_PARTE_' + i] = contenido.substring(i * tamano, (i + 1) * tamano);
-  }
-
-  valores[claveBase + '_META'] = JSON.stringify({
-    fragmentos: fragmentos,
-    longitud: contenido.length,
-    actualizado: Date.now()
-  });
-
-  propiedades.setProperties(valores, false);
-}
-
-function leerEstadoJsonFragmentado_(claveBase) {
-  var propiedades = PropertiesService.getDocumentProperties();
-  var meta = parsearJsonSeguro(propiedades.getProperty(claveBase + '_META'));
-  if (!meta || !meta.fragmentos) return null;
-
-  var partes = [];
-  for (var i = 0; i < Number(meta.fragmentos); i++) {
-    var parte = propiedades.getProperty(claveBase + '_PARTE_' + i);
-    if (parte === null || parte === undefined) return null;
-    partes.push(parte);
-  }
-
-  var contenido = partes.join('');
-  if (Number(meta.longitud) !== contenido.length) return null;
-  return parsearJsonSeguro(contenido);
-}
-
-function eliminarEstadoJsonFragmentado_(claveBase) {
-  var propiedades = PropertiesService.getDocumentProperties();
-  var meta = parsearJsonSeguro(propiedades.getProperty(claveBase + '_META'));
-
-  if (meta && meta.fragmentos) {
-    for (var i = 0; i < Number(meta.fragmentos); i++) {
-      propiedades.deleteProperty(claveBase + '_PARTE_' + i);
-    }
-  }
-
-  propiedades.deleteProperty(claveBase + '_META');
-}
-
-function obtenerHeadersServidor_(tokenOAuth) {
-  var headers = {
-    Authorization: 'Bearer ' + tokenOAuth,
-    'ngrok-skip-browser-warning': 'true',
-    'Bypass-Tunnel-Reminder': 'true'
   };
 
-  var clave = String(obtenerValorConfigSistema_('CLAVE_SERVIDOR', '') || '').trim();
-  if (clave) headers['X-Sistema-Maestro-Key'] = clave;
-  return headers;
 }
 
-function enviarArchivosPapeleraPorId_(ids, idsConservar) {
-  var conservar = {};
-  (idsConservar || []).forEach(function(id) { conservar[String(id)] = true; });
-  var eliminados = 0;
 
-  (ids || []).forEach(function(id) {
-    var valor = String(id || '').trim();
-    if (!valor || conservar[valor]) return;
-    try {
-      var archivo = DriveApp.getFileById(valor);
-      if (!archivo.isTrashed()) {
-        archivo.setTrashed(true);
-        eliminados++;
-      }
-    } catch (error) {
-      console.warn('No se pudo enviar a la papelera el archivo ' + valor + ': ' + error.message);
+
+function restaurarCaratulasBase(
+
+  idPlantillaElegida,
+
+  tipoCaratulaElegido
+
+) {
+
+  var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
+
+  var idDestino = obtenerIdDesdeHoja('C4', nombreHoja);
+
+  var idPlantilla = idPlantillaElegida ||
+
+    extraerIdDeCeldaSegura(nombreHoja, 'C3');
+
+  var plantilla = obtenerArchivoPlantillaDesdeId(idPlantilla);
+
+  var tipo = tipoCaratulaElegido === 'nueva'
+
+    ? 'nueva'
+
+    : 'original';
+
+  var destino = DriveApp.getFolderById(idDestino);
+
+  var cache = {};
+
+  var logs = [];
+
+
+
+  var grupos = [
+
+    {
+
+      carpeta: 'CARATULAS ANEXO 11 (NO BORRAR)',
+
+      nombres: [
+
+        '1. Ficha Diagnostico Tecnico Legal',
+
+        '2. PLanos Diagnostico Tecnico Legal',
+
+        '3. Ficha Reniec',
+
+        '4. Documento Legal',
+
+      ]
+
+    },
+
+    {
+
+      carpeta: 'CARATULAS ANEXO 13 (NO BORRAR)',
+
+      nombres: [
+
+        '1. FICHA SOCIOECONÓMICA',
+
+        '2. FICHA TÉCNICA',
+
+        '3. MEMORIA DESCRIPTIVA',
+
+        '4. PLANOS',
+
+        '5. DOC. DEL SUJETO PASIVO',
+
+        '5.1. FICHA RENIEC',
+
+        '5.1. FICHA RUC',
+
+        '5.2. CONSTANCIA DE POSESIÓN',
+
+        '5.2. DECLARACIÓN JURADA',
+
+        '5.2. PARTIDA REGISTRAL',
+
+        '6. INFORME TÉCNICO DE TASACIÓN'
+
+      ]
+
     }
+
+  ];
+
+
+
+  var creadas = 0;
+
+  var omitidas = 0;
+
+  var errores = [];
+
+  var archivosGenerados = []; // 👈 NUEVO
+
+
+
+  grupos.forEach(function(grupo) {
+
+    var carpeta = getOrCreateFolder(
+
+      destino,
+
+      grupo.carpeta,
+
+      cache
+
+    );
+
+
+
+    grupo.nombres.forEach(function(nombreItem) {
+
+      var filename =
+
+        sanitizarNombreArchivo(nombreItem.toUpperCase()) + '.PDF';
+
+      var existentes = carpeta.getFilesByName(filename);
+
+
+
+      if (existentes.hasNext()) {
+
+        var existente = existentes.next();
+
+        omitidas++;
+
+
+
+        logs.push(crearFilaActividadCaratulas_(
+
+          'Google Apps Script - Restauración',
+
+          filename,
+
+          '⏭️ Carátula base omitida: ya existía',
+
+          existente.getUrl(),
+
+          existente.getId()
+
+        ));
+
+        return;
+
+      }
+
+
+
+      try {
+
+        var pdfCreado = crearPDFDesdePlantilla_(
+
+          plantilla,
+
+          limpiarTextoSinPrefijoAvanzado(nombreItem),
+
+          extraerPrefijoAvanzado(nombreItem),
+
+          obtenerTextoVisual(nombreItem),
+
+          filename,
+
+          carpeta,
+
+          tipo
+
+        );
+
+
+
+        creadas++;
+
+
+
+        archivosGenerados.push({ // 👈 NUEVO
+
+          origen: 'Anexos 11 y 13',
+
+          id: pdfCreado.id,
+
+          url: pdfCreado.url,
+
+          name: pdfCreado.name
+
+        });
+
+
+
+        logs.push(crearFilaActividadCaratulas_(
+
+          'Google Apps Script - Restauración',
+
+          pdfCreado.name || filename,
+
+          '✅ Carátula base restaurada',
+
+          pdfCreado.url,
+
+          pdfCreado.id
+
+        ));
+
+
+
+      } catch (error) {
+
+        errores.push(nombreItem + ': ' + error.message);
+
+
+
+        logs.push(crearFilaActividadCaratulas_(
+
+          'Google Apps Script - Restauración',
+
+          filename,
+
+          '❌ Error al restaurar: ' + error.message,
+
+          '',
+
+          ''
+
+        ));
+
+      }
+
+    });
+
   });
 
-  return eliminados;
-}
 
-// NUEVA FUNCIÓN: obtenerPaginasDePdf
-function obtenerPaginasDePdf(idsArchivos) {
-  var ids = Array.isArray(idsArchivos) ? idsArchivos : [idsArchivos];
-  var resultados = [];
 
-  ids.forEach(function(fileId) {
-    try {
-      var archivo = DriveApp.getFileById(fileId);
-      if (archivo.getMimeType() !== MimeType.PDF) {
-        try {
-          archivo = archivo.getAs(MimeType.PDF);
-        } catch (e) {
-          throw new Error('El archivo no es PDF y no se pudo convertir.');
-        }
-      }
+  var registrosAgregados = escribirLogsCaratulas_(
 
-      var blob = archivo.getBlob();
-      var bytes = blob.getBytes();
-      var totalPaginas = 0;
-      var CHUNK_SIZE = 512 * 1024; // 512 KB
+    nombreHoja,
 
-      for (var i = 0; i < bytes.length; i += CHUNK_SIZE) {
-        var chunk = bytes.slice(i, i + CHUNK_SIZE);
-        var texto = '';
-        for (var j = 0; j < chunk.length; j++) {
-          texto += String.fromCharCode(chunk[j]);
-        }
-        var coincidencias = texto.match(/\/Type\s*\/Page[^s]/g);
-        if (coincidencias) totalPaginas += coincidencias.length;
-      }
+    logs
 
-      resultados.push({ id: fileId, paginas: totalPaginas });
-    } catch (error) {
-      console.warn('No se pudo contar páginas de ' + fileId + ': ' + error.message);
-      resultados.push({ id: fileId, paginas: 0 });
-    }
-  });
+  );
 
-  return resultados;
+
+
+  return {
+
+    status: errores.length
+
+      ? (creadas ? 'partial' : 'error')
+
+      : 'success',
+
+    creadas: creadas,
+
+    omitidas: omitidas,
+
+    errores: errores,
+
+    registrosAgregados: registrosAgregados,
+
+    archivosGenerados: archivosGenerados, // 👈 NUEVO
+
+    mensaje:
+
+      (
+
+        errores.length
+
+          ? '⚠️ Restauración completada con observaciones. '
+
+          : '✅ Restauración completada. '
+
+      ) +
+
+      'Creadas: ' + creadas +
+
+      ' | Omitidas por existir: ' + omitidas +
+
+      ' | Errores: ' + errores.length +
+
+      ' | Actividades registradas: ' + registrosAgregados
+
+  };
+
 }
