@@ -129,7 +129,8 @@ function procesarCalculoMatematico(seleccionados, config) {
 
   var tomos = [];
   var actual = crearTomoVacio_(1);
-  var capacidadContenido = obtenerCapacidadContenidoTomo_();
+  // 👇 FIX: ahora la capacidad respeta config.paginasPorTomo si viene desde la interfaz
+  var capacidadContenido = obtenerCapacidadContenidoTomo_(config);
 
   archivosAuto.forEach(function(pdf) {
     if (actual.archivos.length && actual.totalContenido + pdf.paginasFisicas > capacidadContenido) {
@@ -141,7 +142,8 @@ function procesarCalculoMatematico(seleccionados, config) {
 
   if (actual.archivos.length) tomos.push(actual);
 
-  tomos = absorberTomosPequenosSeguro_(tomos);
+  // 👇 FIX: se propaga config para que también respete el límite manual al fusionar tomos pequeños
+  tomos = absorberTomosPequenosSeguro_(tomos, config);
 
   if (archivosManual.length) {
     var tomoManual = crearTomoVacio_(tomos.length + 1);
@@ -150,7 +152,8 @@ function procesarCalculoMatematico(seleccionados, config) {
     tomos.push(tomoManual);
   }
 
-  recalcularTomos_(tomos);
+  // 👇 FIX: se propaga config para que excedeLimite se calcule contra el límite correcto
+  recalcularTomos_(tomos, config);
   return { tomos: tomos, omitidos: omitidos };
 }
 
@@ -159,8 +162,18 @@ function obtenerReservaCaratulaTomo_() {
   return isFinite(valor) && valor >= 0 ? Math.floor(valor) : 1;
 }
 
-function obtenerCapacidadContenidoTomo_() {
-  var limite = Number(obtenerValorConfigSistema_('LIMITE_PAGINAS', 600));
+// 👇 NUEVA FUNCIÓN: resuelve el límite de páginas por tomo priorizando lo que
+// el usuario configuró en la interfaz (config.paginasPorTomo). Si no viene
+// nada válido, cae de vuelta al valor fijo del sistema (comportamiento anterior).
+function obtenerLimitePaginasTomo_(config) {
+  var limiteConfig = Number(config && config.paginasPorTomo);
+  if (isFinite(limiteConfig) && limiteConfig > 0) return Math.floor(limiteConfig);
+  return Number(obtenerValorConfigSistema_('LIMITE_PAGINAS', 600));
+}
+
+// 👇 FIX: ahora recibe config y usa obtenerLimitePaginasTomo_ en vez del valor fijo
+function obtenerCapacidadContenidoTomo_(config) {
+  var limite = obtenerLimitePaginasTomo_(config);
   var reserva = obtenerReservaCaratulaTomo_();
   return Math.max(1, Math.floor(limite) - reserva);
 }
@@ -262,9 +275,10 @@ function agregarPdfATomo_(tomo, pdf) {
   tomo.totalFisicas = tomo.totalContenido + obtenerReservaCaratulaTomo_();
 }
 
-function absorberTomosPequenosSeguro_(tomos) {
+// 👇 FIX: ahora recibe config y lo usa para el límite real y para recalcular
+function absorberTomosPequenosSeguro_(tomos, config) {
   var salida = tomos.slice();
-  var limite = Number(obtenerValorConfigSistema_('LIMITE_PAGINAS', 600));
+  var limite = obtenerLimitePaginasTomo_(config);
   var minimo = Number(obtenerValorConfigSistema_('LIMITE_MINIMO_TOMO', 150));
   var reserva = obtenerReservaCaratulaTomo_();
   var i = 0;
@@ -277,14 +291,14 @@ function absorberTomosPequenosSeguro_(tomos) {
     if (i > 0 && paginasFinalesCombinadas(salida[i - 1], tomo) <= limite) {
       salida[i - 1].archivos = salida[i - 1].archivos.concat(tomo.archivos);
       salida.splice(i, 1);
-      recalcularTomoIndividual_(salida[i - 1]);
+      recalcularTomoIndividual_(salida[i - 1], config);
       i = Math.max(0, i - 1);
       continue;
     }
     if (i < salida.length - 1 && paginasFinalesCombinadas(tomo, salida[i + 1]) <= limite) {
       tomo.archivos = tomo.archivos.concat(salida[i + 1].archivos);
       salida.splice(i + 1, 1);
-      recalcularTomoIndividual_(tomo);
+      recalcularTomoIndividual_(tomo, config);
       continue;
     }
     i++;
@@ -292,7 +306,8 @@ function absorberTomosPequenosSeguro_(tomos) {
   return salida;
 }
 
-function recalcularTomoIndividual_(tomo) {
+// 👇 FIX: ahora recibe config y calcula excedeLimite contra el límite real (manual o del sistema)
+function recalcularTomoIndividual_(tomo, config) {
   tomo.totalContenido = 0;
   tomo.totalFoleo = 0;
   tomo.archivos.forEach(function(pdf) {
@@ -302,13 +317,14 @@ function recalcularTomoIndividual_(tomo) {
     tomo.totalFoleo += pdf.paginasFoleo;
   });
   tomo.totalFisicas = tomo.totalContenido + obtenerReservaCaratulaTomo_();
-  tomo.excedeLimite = tomo.totalFisicas > Number(obtenerValorConfigSistema_('LIMITE_PAGINAS', 600));
+  tomo.excedeLimite = tomo.totalFisicas > obtenerLimitePaginasTomo_(config);
 }
 
-function recalcularTomos_(tomos) {
+// 👇 FIX: ahora recibe config y lo propaga a recalcularTomoIndividual_
+function recalcularTomos_(tomos, config) {
   tomos.forEach(function(tomo, indice) {
     tomo.numero = indice + 1;
-    recalcularTomoIndividual_(tomo);
+    recalcularTomoIndividual_(tomo, config);
   });
 }
 
