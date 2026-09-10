@@ -148,9 +148,13 @@ function procesarSeleccionados(lote, configUbicacion, configCaratula) {
 
   var destinoRaiz = DriveApp.getFolderById(idDestino);
 
+  var idBiblioteca = obtenerIdBibliotecaCaratulas_(nombreHoja);
+
+  var carpetaBiblioteca = DriveApp.getFolderById(idBiblioteca);
+
   var cacheCarpetas = {};
 
-  var indiceCaratulasCompartidas = soloCarpetas ? {} : construirIndiceCaratulasCompartidas_(destinoRaiz);
+  var indiceCaratulasCompartidas = soloCarpetas ? {} : construirIndiceCaratulasCompartidas_(carpetaBiblioteca);
 
   var logs = [];
 
@@ -1052,92 +1056,69 @@ function crearCarpetaLibre(nombreCarpeta) {
 
 
 function restaurarCaratulasBase(
-
   idPlantillaElegida,
-
   tipoCaratulaElegido
-
 ) {
-
   var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
-
-  var idDestino = obtenerIdDesdeHoja('C4', nombreHoja);
+  // Dos destinos posibles: C9 (exclusiva para Anexo 11 y 13) y C4
+  // (biblioteca general, donde el compilador busca todo lo demás).
+  var idBibliotecaAnexos = obtenerIdBibliotecaCaratulas_(nombreHoja); // C9
+  var idBibliotecaGeneral = obtenerIdDesdeHoja('C4', nombreHoja);      // C4
 
   var idPlantilla = idPlantillaElegida ||
-
     extraerIdDeCeldaSegura(nombreHoja, 'C3');
 
   var plantilla = obtenerArchivoPlantillaDesdeId(idPlantilla);
 
   var tipo = tipoCaratulaElegido === 'nueva'
-
     ? 'nueva'
-
     : 'original';
 
-  var destino = DriveApp.getFolderById(idDestino);
-
   var cache = {};
-
   var logs = [];
 
-
-
   var grupos = [
-
     {
-
+      destinoId: idBibliotecaAnexos, // C9
       carpeta: 'CARATULAS ANEXO 11 (NO BORRAR)',
-
       nombres: [
-
         '1. Ficha Diagnostico Tecnico Legal',
-
-        '2. PLanos Diagnostico Tecnico Legal',
-
-        '3. Ficha Reniec',
-
-        '4. Documento Legal',
-
+        '1.1 Plan de Saneamiento Fisico Legal',
+        '2. Planos Diagnostico Tecnico Legal',
+        '3. Certificado de Busqueda Catastral General',
+        '4. Ficha Reniec',
+        '5. Informe Tecnico Diagnostico',
+        '6. Documento Legal',
       ]
-
     },
-
     {
-
+      destinoId: idBibliotecaAnexos, // C9
       carpeta: 'CARATULAS ANEXO 13 (NO BORRAR)',
-
       nombres: [
-
         '1. FICHA SOCIOECONÓMICA',
-
         '2. FICHA TÉCNICA',
-
         '3. MEMORIA DESCRIPTIVA',
-
         '4. PLANOS',
-
         '5. DOC. DEL SUJETO PASIVO',
-
         '5.1. FICHA RENIEC',
-
         '5.1. FICHA RUC',
-
         '5.2. CONSTANCIA DE POSESIÓN',
-
         '5.2. DECLARACIÓN JURADA',
-
         '5.2. PARTIDA REGISTRAL',
-
         '6. INFORME TÉCNICO DE TASACIÓN'
-
       ]
-
+    },
+    {
+      destinoId: idBibliotecaGeneral, // C4 (el compilador la busca ahí)
+      carpeta: 'CARATULAS EXPEDIENTE DIAGNOSTICO (NO BORRAR)',
+      nombres: [
+        '1. Ficha Diag. Tec. Legal',
+        '2. Planos Diag. Tec. Legal',
+        '3. Cert. de Busq. Catastral',
+        '4. Ficha Ruc'
+      ]
     }
-
   ];
-
-
 
   var creadas = 0;
 
