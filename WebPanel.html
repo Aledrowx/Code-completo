@@ -198,6 +198,7 @@
       font-size: 16px; outline: none;
     }
     .form-input:focus, .form-select:focus { border-color: var(--primary); }
+    .form-hint { font-size: 11.5px; color: var(--text-light); margin-top: 4px; }
 
     .info-banner {
       background: var(--info-bg); border: 1px solid var(--info-border); color: var(--text-muted);
@@ -241,7 +242,12 @@
       font-size: 12.5px; color: var(--text-main); border-radius: 4px; cursor: pointer; white-space: nowrap;
     }
     .anexo-menu-item:hover { background: var(--primary-light); color: var(--primary); }
-    .anexo-menu-empty { padding: 6px 10px; font-size: 12px; color: var(--text-light); white-space: nowrap; }
+    .anexo-menu-empty { padding: 6px 10px; font-size: 12px; color: var(--text-light); white-space: normal; max-width: 260px; }
+    .anexo-menu-retry {
+      display: block; width: 100%; text-align: left; padding: 6px 10px; border: none; background: none;
+      font-size: 12.5px; color: var(--primary); border-radius: 4px; cursor: pointer; font-weight: 600;
+    }
+    .anexo-menu-retry:hover { background: var(--primary-light); }
 
     .status-msg { display: none; padding: 10px; border-radius: var(--radius-sm); margin-top: 12px; word-break: break-word; }
     .msg-success { background: var(--success-bg); color: var(--success); border: 1px solid #bbf7d0; }
@@ -527,6 +533,12 @@
                 </div>
 
                 <div class="form-group mt-10">
+                  <label class="form-label">Páginas máximas por tomo</label>
+                  <input id="paginasPorTomo" type="number" class="form-input" placeholder="Ej. 500" min="1" max="500" value="500" onchange="limitarPaginasPorTomo()">
+                  <div class="form-hint">Límite absoluto: 500 páginas por tomo. Si un tomo superaría este límite, se dividirá automáticamente al fusionar.</div>
+                </div>
+
+                <div class="form-group mt-10">
                   <label class="form-label">Tomos específicos (vacío = todos)</label>
                   <input id="numerosTomos" type="text" class="form-input" placeholder="Ejemplo: 1, 3, 5">
                 </div>
@@ -713,6 +725,9 @@
     let historialTomosData = [];
     let historialTomosPagina = 1;
     const HISTORIAL_TOMOS_POR_PAGINA = 5;
+
+    // LÍMITE MÁXIMO ABSOLUTO DE PÁGINAS POR TOMO
+    const LIMITE_MAXIMO_PAGINAS_TOMO = 500;
 
     // MENÚ LATERAL RESPONSIVE
     function toggleSidebar() {
@@ -1151,6 +1166,28 @@
       document.getElementById('bloqueNumeracionManual').style.display = checked ? 'block' : 'none';
     }
 
+    // LÍMITE DE PÁGINAS POR TOMO (máximo absoluto: 500)
+    function limitarPaginasPorTomo() {
+      const input = document.getElementById('paginasPorTomo');
+      if (!input) return;
+      let valor = parseInt(input.value, 10);
+      if (isNaN(valor) || valor < 1) {
+        valor = LIMITE_MAXIMO_PAGINAS_TOMO;
+      } else if (valor > LIMITE_MAXIMO_PAGINAS_TOMO) {
+        valor = LIMITE_MAXIMO_PAGINAS_TOMO;
+        showWarning('statusTomos', `El máximo permitido es ${LIMITE_MAXIMO_PAGINAS_TOMO} páginas por tomo. Se ajustó automáticamente.`);
+      }
+      input.value = valor;
+    }
+
+    function obtenerPaginasPorTomoValidas() {
+      const input = document.getElementById('paginasPorTomo');
+      let valor = input ? parseInt(input.value, 10) : LIMITE_MAXIMO_PAGINAS_TOMO;
+      if (isNaN(valor) || valor < 1) valor = LIMITE_MAXIMO_PAGINAS_TOMO;
+      if (valor > LIMITE_MAXIMO_PAGINAS_TOMO) valor = LIMITE_MAXIMO_PAGINAS_TOMO;
+      return valor;
+    }
+
     // SELECCIÓN POR RANGO CON SHIFT+CLIC (carpetas y PDFs del árbol)
     const ultimoCheckPorArbol = {};
 
@@ -1222,19 +1259,46 @@
     // SELECCIÓN POR CAPAS (ANEXOS)
     const anexoAnalisisCache = {};
 
+    // NOTA IMPORTANTE (fix): antes, si CUALQUIER subcarpeta anidada fallaba al
+    // analizarse (permisos, carpeta corrupta, timeout, etc.), el Promise.all
+    // completo se rechazaba y todo el anexo mostraba "Error al analizar",
+    // aunque el resto de la estructura estuviera perfectamente bien. Esto
+    // explica por qué unos anexos funcionan y otros (como el 4) fallan de
+    // forma directa: basta con que UNA subcarpeta dentro de ese anexo tenga
+    // un problema puntual para tumbar todo el análisis.
+    // Ahora cada nivel se analiza de forma aislada: si una carpeta específica
+    // falla, se trata como si no tuviera subcarpetas ni archivos (profundidad 0)
+    // en vez de romper el análisis completo del anexo.
     async function analizarProfundidadYArchivos(folderId) {
-      const [subs, pdfs] = await Promise.all([
-        callBackend('obtenerSubcarpetas', folderId),
-        callBackend('obtenerArchivosPdfDeCarpeta', folderId)
-      ]);
+      let subs = [];
+      let pdfs = [];
+      try {
+        const resultado = await Promise.all([
+          callBackend('obtenerSubcarpetas', folderId),
+          callBackend('obtenerArchivosPdfDeCarpeta', folderId)
+        ]);
+        subs = resultado[0] || [];
+        pdfs = resultado[1] || [];
+      } catch (err) {
+        // Esta carpeta puntual falló: no rompemos el análisis del árbol completo.
+        console.error('No se pudo analizar la carpeta ' + folderId + ':', err);
+        return { profundidad: 0, tieneArchivos: false, huboError: true };
+      }
+
       let profundidad = 0;
       let tieneArchivos = pdfs.length > 0;
+      let huboErrorAnidado = false;
+
       if (subs.length) {
-        const resultados = await Promise.all(subs.map(s => analizarProfundidadYArchivos(s.id)));
+        const resultados = await Promise.all(
+          subs.map(s => analizarProfundidadYArchivos(s.id))
+        );
         profundidad = 1 + Math.max(...resultados.map(r => r.profundidad));
         tieneArchivos = tieneArchivos || resultados.some(r => r.tieneArchivos);
+        huboErrorAnidado = resultados.some(r => r.huboError);
       }
-      return { profundidad, tieneArchivos };
+
+      return { profundidad, tieneArchivos, huboError: huboErrorAnidado };
     }
 
     function crearMenuAnexo(li, toggle, carpeta, mostrarPdfs) {
@@ -1269,27 +1333,53 @@
     }
     document.addEventListener('click', cerrarMenusAnexo);
 
-    async function poblarMenuAnexo(menu, li, toggle, carpeta, mostrarPdfs) {
-      let analisis = anexoAnalisisCache[carpeta.id];
+    async function poblarMenuAnexo(menu, li, toggle, carpeta, mostrarPdfs, forzarReintento) {
+      let analisis = forzarReintento ? null : anexoAnalisisCache[carpeta.id];
       if (!analisis) {
         menu.innerHTML = '<div class="anexo-menu-empty">Analizando estructura...</div>';
         try {
           analisis = await analizarProfundidadYArchivos(carpeta.id);
           anexoAnalisisCache[carpeta.id] = analisis;
         } catch (err) {
-          menu.innerHTML = '<div class="anexo-menu-empty">Error al analizar</div>';
+          // Con el fix de analizarProfundidadYArchivos esto ya casi nunca debería
+          // ocurrir, pero se deja como red de seguridad con opción de reintentar.
+          if (!menu.classList.contains('open')) return;
+          menu.innerHTML = '';
+          const msgErr = document.createElement('div');
+          msgErr.className = 'anexo-menu-empty';
+          msgErr.textContent = 'Error al analizar: ' + (err && err.message ? err.message : 'error desconocido');
+          menu.appendChild(msgErr);
+          const btnReintentar = document.createElement('button');
+          btnReintentar.type = 'button';
+          btnReintentar.className = 'anexo-menu-retry';
+          btnReintentar.textContent = 'Reintentar';
+          btnReintentar.onclick = async (ev) => {
+            ev.stopPropagation();
+            await poblarMenuAnexo(menu, li, toggle, carpeta, mostrarPdfs, true);
+          };
+          menu.appendChild(btnReintentar);
           return;
         }
       }
       if (!menu.classList.contains('open')) return;
 
-      const { profundidad, tieneArchivos } = analisis;
+      const { profundidad, tieneArchivos, huboError } = analisis;
 
       if (!profundidad && !tieneArchivos) {
-        menu.innerHTML = '<div class="anexo-menu-empty">Sin subcarpetas ni archivos</div>';
+        menu.innerHTML = huboError
+          ? '<div class="anexo-menu-empty">No se encontraron subcarpetas ni archivos accesibles (parte del contenido no pudo analizarse).</div>'
+          : '<div class="anexo-menu-empty">Sin subcarpetas ni archivos</div>';
         return;
       }
       menu.innerHTML = '';
+
+      if (huboError) {
+        const aviso = document.createElement('div');
+        aviso.className = 'anexo-menu-empty';
+        aviso.style.color = 'var(--warning)';
+        aviso.textContent = 'Aviso: parte de esta estructura no pudo analizarse; el conteo de capas puede estar incompleto.';
+        menu.appendChild(aviso);
+      }
 
       const btnTodo = document.createElement('button');
       btnTodo.type = 'button';
@@ -1723,12 +1813,16 @@
       const pdfsManual = obtenerPdfsSeleccionados('treeTomos');
       if (!seleccionados.length && !pdfsManual.length) return alert('Seleccione carpetas de compilados, o marque PDFs sueltos para armar un tomo manual');
 
+      // Se valida y limita el campo de páginas por tomo antes de construir la config
+      limitarPaginasPorTomo();
+
       const config = {
         numerosTomos: document.getElementById('numerosTomos').value,
         permitirSinCaratula: document.getElementById('permitirSinCaratula').checked,
         usarNumeracionManual: document.getElementById('usarNumeracionManual').checked,
         numeroInicialTomo: document.getElementById('numeroInicialTomo').value,
         totalGeneralTomos: document.getElementById('totalGeneralTomos').value,
+        paginasPorTomo: obtenerPaginasPorTomoValidas(),
         pdfsManual: pdfsManual
       };
 
