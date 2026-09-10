@@ -76,11 +76,25 @@ function encontrarCaratulaPorCarpeta_(nombreCarpeta, listaCaratulas, permitirPar
   return null;
 }
 
+// ====================================================================
+// 📚 C9 — BIBLIOTECA DE CARÁTULAS EXCLUSIVA PARA ANEXO 11 Y ANEXO 13
+// ====================================================================
+// C4 sigue siendo la biblioteca general (carátula principal de cada
+// predio/carpeta, y las carátulas de carpeta en compilaciones normales).
+// C9 es una biblioteca aparte que solo se usa para las carátulas macro
+// y de bloque de los Anexos 11 y 13 (de ahí se leen en el orden que
+// tienen sus subcarpetas y se enlazan a los PDF correspondientes).
+// ====================================================================
+function obtenerIdBibliotecaCaratulas_(nombreHoja) {
+  return obtenerIdDesdeHoja('C9', nombreHoja);
+}
+
 function obtenerDatosParaCompilar(seleccionados) {
   var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
   var idC2 = obtenerIdDesdeHoja('C2', nombreHoja);
   var idC4 = obtenerIdDesdeHoja('C4', nombreHoja);
   var idC6 = obtenerIdDesdeHoja('C6', nombreHoja);
+  var idBibliotecaAnexos = obtenerIdBibliotecaCaratulas_(nombreHoja); // C9, solo Anexo 11 y 13
   var filtrados = filtrarSeleccionadosMasEspecificos(seleccionados);
 
   if (!filtrados.length) throw new Error('No quedaron carpetas válidas después de eliminar selecciones duplicadas padre/hijo.');
@@ -89,7 +103,10 @@ function obtenerDatosParaCompilar(seleccionados) {
     return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
   });
 
-  var caratulas = extraerTodasLasCaratulas_(DriveApp.getFolderById(idC4));
+  // Dos bibliotecas independientes: C4 para todo lo general (como antes),
+  // C9 exclusivamente para Anexo 11 y Anexo 13.
+  var caratulasGenerales = extraerTodasLasCaratulas_(DriveApp.getFolderById(idC4));
+  var caratulasAnexos = extraerTodasLasCaratulas_(DriveApp.getFolderById(idBibliotecaAnexos));
   var compilaciones = [];
   var caratulasMacroUsadas = {};
 
@@ -104,12 +121,13 @@ function obtenerDatosParaCompilar(seleccionados) {
 
     // En los Anexos 11 y 13, la carátula general del anexo se incorpora
     // una sola vez y únicamente en el primer código real del grupo.
+    // Esta carátula macro se busca SOLO en la biblioteca de C9.
     if (
       grupo &&
       !caratulasMacroUsadas[grupo] &&
       esPrimerCodigoRealAnexoEspecial_(sel.id, idC2, grupo)
     ) {
-      var macro = buscarCaratulaMacroAnexo_(grupo, primerOrden, caratulas);
+      var macro = buscarCaratulaMacroAnexo_(grupo, primerOrden, caratulasAnexos);
 
       if (macro) {
         secuencia.push({
@@ -126,7 +144,17 @@ function obtenerDatosParaCompilar(seleccionados) {
       }
     }
 
-    var principal = encontrarCaratulaPorCarpeta_(sel.name, caratulas, false);
+    // La carátula principal de cada carpeta/predio se sigue buscando
+    // (y generando si falta) en C4, igual que siempre.
+    var principal = encontrarCaratulaPorCarpeta_(sel.name, caratulasGenerales, false);
+
+    if (!principal) {
+      principal = generarCaratulaPrincipalFaltante_(sel.name, idC4, nombreHoja, caratulasGenerales);
+      if (!principal) {
+        alertas.push('⚠️ No se pudo generar la carátula principal de "' + sel.name + '"');
+      }
+    }
+
     if (principal) {
       secuencia.push({
         id: principal.id,
@@ -136,15 +164,18 @@ function obtenerDatosParaCompilar(seleccionados) {
     }
 
     if (grupo === 'ANEXO 11') {
-      var resultado11 = construirSecuenciaAnexo11_(origen, caratulas);
-      secuencia = secuencia.concat(resultado11.archivos);
-      if (resultado11.alerta) alertas.push(resultado11.alerta);
+      // Orden = biblioteca C9 (carátula general + carátula por división,
+      // en el orden en que están numeradas en C9), no la estructura de
+      // carpetas de origen (C2). Se agrupan los PDF de origen bajo la
+      // carátula de su división correspondiente, respetando el orden
+      // exacto en que están listadas las carátulas en C9.
+      secuencia = secuencia.concat(construirSecuenciaAnexo11Dinamica_(origen, caratulasAnexos));
     } else if (grupo === 'ANEXO 13') {
       secuencia = secuencia.concat(
-        rastrearAnexo13_(origen, true, false, caratulas)
+        rastrearAnexo13_(origen, true, false, caratulasAnexos)
       );
     } else {
-      secuencia = secuencia.concat(rastrearGenerico_(origen, true, caratulas));
+      secuencia = secuencia.concat(rastrearGenerico_(origen, true, caratulasGenerales));
     }
 
     secuencia = eliminarDuplicadosPorId_(secuencia);
@@ -157,6 +188,55 @@ function obtenerDatosParaCompilar(seleccionados) {
   }
 
   return { idC6: idC6, compilaciones: compilaciones };
+}
+
+// ====================================================================
+// 🏷️ CARÁTULA PRINCIPAL FALTANTE — se genera al vuelo y se cachea
+// ====================================================================
+// Si un predio/código no tiene su carátula principal pre-generada en la
+// biblioteca general (C4), en vez de omitirla (dejando el compilado sin
+// portada), se genera aquí mismo con la plantilla de C3 y se guarda
+// dentro de C4 para que la próxima compilación la reutilice sin volver
+// a crearla.
+// ====================================================================
+function generarCaratulaPrincipalFaltante_(nombreCarpeta, idBiblioteca, nombreHoja, caratulas) {
+  try {
+    var idPlantilla = extraerIdDeCeldaSegura(nombreHoja, 'C3');
+    if (!idPlantilla) return null;
+
+    var plantilla = obtenerArchivoPlantillaDesdeId(idPlantilla);
+    var carpetaGeneradas = getOrCreateFolder(
+      DriveApp.getFolderById(idBiblioteca),
+      'CARATULAS PREDIOS (GENERADAS AUTOMATICAMENTE)',
+      {}
+    );
+
+    var filename = sanitizarNombreArchivo(String(nombreCarpeta).trim().toUpperCase()) + '.PDF';
+    var existentes = carpetaGeneradas.getFilesByName(filename);
+    if (existentes.hasNext()) {
+      var existente = existentes.next();
+      var cover = { id: existente.getId(), name: existente.getName(), nameNorm: normalizarTexto(existente.getName()) };
+      caratulas.push(cover);
+      return cover;
+    }
+
+    var pdfCreado = crearPDFDesdePlantilla_(
+      plantilla,
+      limpiarTextoSinPrefijoAvanzado(nombreCarpeta),
+      extraerPrefijoAvanzado(nombreCarpeta),
+      obtenerTextoVisual(nombreCarpeta),
+      filename,
+      carpetaGeneradas,
+      'original'
+    );
+
+    var creada = { id: pdfCreado.id, name: pdfCreado.name, nameNorm: normalizarTexto(pdfCreado.name) };
+    caratulas.push(creada);
+    return creada;
+  } catch (error) {
+    console.warn('No se pudo generar la carátula principal de "' + nombreCarpeta + '": ' + error.message);
+    return null;
+  }
 }
 
 function determinarPrimerOrden_(sel, ruta, idC2) {
@@ -338,16 +418,85 @@ function construirSecuenciaAnexo11_(origen, caratulas) {
   });
 
   var secuencia = [];
-  agregarBloque_(secuencia, bloques.b1, caratulas, 'memoria diagnostico');
+  agregarBloque_(secuencia, bloques.b1, caratulas, 'diagnostico tecnico legal');
   agregarBloque_(secuencia, bloques.b2, caratulas, 'plan de saneamiento');
   agregarBloque_(secuencia, bloques.b3, caratulas, 'planos diagnostico');
   agregarBloque_(secuencia, bloques.b4, caratulas, 'certificado de busqueda');
-  agregarBloque_(secuencia, bloques.b5, caratulas, 'informe tecnico');
+  agregarBloque_(secuencia, bloques.b5, caratulas, 'informe tecnico diagnostico');
 
   return {
     archivos: secuencia,
     alerta: existeCarpetaCBC && !bloques.b4.length ? '⚠️ Carpeta de Certificado Catastral vacía' : ''
   };
+}
+
+// ====================================================================
+// 🆕 ANEXO 11 — VERSIÓN DINÁMICA: EL ORDEN LO MARCA C9
+// ====================================================================
+// En vez de clasificar los PDF de origen en 5 bloques fijos con palabras
+// clave escritas a mano, esta versión:
+//   1) Toma las carátulas de C9 y las ordena tal como están ahí
+//      (1, 1.1, 2, 3, 4, 5, 6...).
+//   2) Recorre TODOS los PDF de origen (sin importar en qué subcarpeta
+//      estén).
+//   3) Para cada carátula, en ese orden, busca los PDF de origen cuyo
+//      nombre contenga la misma palabra clave que el nombre de la
+//      carátula (quitando el número inicial y ".pdf"), y los agrupa
+//      justo después de esa carátula.
+//   4) Si un PDF de origen no coincide con ninguna carátula, se agrega
+//      al final sin carátula (para no perderlo).
+// Así, C9 solo se "llama" (nunca se regenera) y el orden final sigue
+// exactamente el orden de C9.
+//
+// 🔧 CONECTADA AL FLUJO PRINCIPAL: es la que ahora usa el ANEXO 11 en
+// obtenerDatosParaCompilar (antes se llamaba a rastrearGenerico_, que
+// ordenaba por estructura de carpetas de C2 y no por el orden real de
+// C9, por eso no salía "carátula general + carátula por división").
+// ====================================================================
+function construirSecuenciaAnexo11Dinamica_(origen, caratulasAnexos) {
+  var coversOrdenadas = caratulasAnexos.slice().sort(function(a, b) {
+    return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
+  });
+
+  var archivosOrigen = [];
+  function recorrer(folder) {
+    var files = folder.getFilesByType(MimeType.PDF);
+    while (files.hasNext()) archivosOrigen.push(files.next());
+    var subs = folder.getFolders();
+    while (subs.hasNext()) recorrer(subs.next());
+  }
+  recorrer(origen);
+  ordenarFiles_(archivosOrigen);
+
+  var usados = {};
+  var secuencia = [];
+
+  coversOrdenadas.forEach(function(cover) {
+    var clave = simplificar(limpiarNombrePDF(cover.name));
+    if (!clave) return;
+
+    var coincidencias = archivosOrigen.filter(function(file) {
+      if (usados[file.getId()]) return false;
+      var nombreArchivo = simplificar(file.getName());
+      return nombreArchivo.indexOf(clave) !== -1 || clave.indexOf(nombreArchivo) !== -1;
+    });
+
+    if (!coincidencias.length) return;
+
+    secuencia.push({ id: cover.id, name: cover.name, type: 'Carátula Bloque (C9)' });
+    coincidencias.forEach(function(file) {
+      usados[file.getId()] = true;
+      secuencia.push({ id: file.getId(), name: file.getName(), type: 'Original' });
+    });
+  });
+
+  archivosOrigen.forEach(function(file) {
+    if (!usados[file.getId()]) {
+      secuencia.push({ id: file.getId(), name: file.getName(), type: 'Original (sin carátula)' });
+    }
+  });
+
+  return secuencia;
 }
 
 function agregarBloque_(secuencia, files, caratulas, patronCaratula) {
@@ -428,7 +577,7 @@ function rastrearGenerico_(folder, isRoot, caratulas) {
   });
 
   if (!isRoot && secuencia.length) {
-    var cover = encontrarCaratulaPorCarpeta_(folder.getName(), caratulas, false);
+    var cover = encontrarCaratulaPorCarpeta_(folder.getName(), caratulas, true);
     if (cover) secuencia.unshift({ id: cover.id, name: cover.name, type: 'Carátula Carpeta' });
   }
 
@@ -482,10 +631,14 @@ function procesarCompilacionSegunModo(seleccionados, metodo, config) {
   var limitePaginas = obtenerValorConfigCompilador_('LIMITE_PAGINAS', 600);
   var paralelas = obtenerValorConfigCompilador_('PETICIONES_PARALELAS', 2);
   var estricto = Boolean(obtenerValorConfigSistema_('MODO_ESTRICTO_COMPILADOR', true));
-  var cacheCarpetas = {};
   var solicitudes = [];
   var referencias = [];
   var omitidos = 0;
+
+  // 👇 CAMBIO: se guarda directamente en la carpeta asignada a C6,
+  // ya no se crea una subcarpeta por cada "folderPrimerOrden".
+  // De ahí es de donde Tomos jala los compilados.
+  var destino = DriveApp.getFolderById(datos.idC6);
 
   datos.compilaciones.forEach(function(comp, indice) {
     var fileIds = [];
@@ -501,8 +654,6 @@ function procesarCompilacionSegunModo(seleccionados, metodo, config) {
       return;
     }
 
-    var destinoRaiz = DriveApp.getFolderById(datos.idC6);
-    var destino = getOrCreateFolder(destinoRaiz, comp.folderPrimerOrden, cacheCarpetas);
     var nombreBase = sanitizarNombreArchivo('COMPILADO_' + comp.nombreCarpeta.toUpperCase());
     var existentes = obtenerCompiladosExistentes_(destino, nombreBase);
 
@@ -1051,5 +1202,3 @@ function consultarCompilacionesPendientes() {
       ' | Pendientes: ' + restantes + ' | Errores: ' + errores + '.'
   };
 }
-
-
