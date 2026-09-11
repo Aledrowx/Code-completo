@@ -109,371 +109,425 @@ function obtenerCaratulaCompartidaPorNombre_(indice, nombreArchivo) {
 function procesarSeleccionados(lote, configUbicacion, configCaratula) {
 
   if (!Array.isArray(lote) || !lote.length) {
+
     throw new Error('No se recibieron carpetas para procesar.');
+
   }
 
+
+
   var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
+
   var idOrigen = obtenerIdDesdeHoja('C2', nombreHoja);
+
   var idDestino = obtenerIdDesdeHoja('C4', nombreHoja);
+
   var ubicacion = configUbicacion || {};
+
   var caratula = configCaratula || {};
+
   var soloCarpetas = Boolean(ubicacion.soloCarpetas);
+
   var tipo = caratula.tipo === 'nueva' ? 'nueva' : 'original';
+
   var archivoPlantilla = null;
 
+
+
   if (!soloCarpetas) {
-    var idPlantilla = caratula.idPlantilla || extraerIdDeCeldaSegura(nombreHoja, 'C3');
+
+    var idPlantilla = caratula.idPlantilla ||
+
+      extraerIdDeCeldaSegura(nombreHoja, 'C3');
+
     archivoPlantilla = obtenerArchivoPlantillaDesdeId(idPlantilla);
+
   }
+
+
 
   var destinoRaiz = DriveApp.getFolderById(idDestino);
+
   var idBiblioteca = obtenerIdBibliotecaCaratulas_(nombreHoja);
+
   var carpetaBiblioteca = DriveApp.getFolderById(idBiblioteca);
-  var indiceCaratulasCompartidas = soloCarpetas ? {} : construirIndiceCaratulasCompartidas_(carpetaBiblioteca);
+
   var cacheCarpetas = {};
+
+  var indiceCaratulasCompartidas = soloCarpetas ? {} : construirIndiceCaratulasCompartidas_(carpetaBiblioteca);
+
   var logs = [];
+
   var resultado = {
+
     status: 'success',
+
     procesados: 0,
+
     carpetasPreparadas: 0,
+
     pdfsCreados: 0,
+
     omitidos: 0,
+
     errores: [],
+
     registrosAgregados: 0,
-    archivosGenerados: []
+
+    archivosGenerados: [] // 👈 NUEVO: {origen, id, url, name} de cada PDF creado
+
   };
 
-  // ================================================================
-  // NUEVO: se procesa TODO el árbol de cada carpeta seleccionada.
-  // La carpeta seleccionada sigue siendo la raíz, pero ahora también
-  // se recorren todas sus subcarpetas en profundidad.
-  // ================================================================
-  lote.forEach(function(item) {
-    if (!item || !item.id || !item.name) {
-      resultado.procesados++;
-      resultado.errores.push({ item: 'Sin nombre', detalle: 'Elemento seleccionado incompleto.' });
-      return;
-    }
+
+
+  for (var i = 0; i < lote.length; i++) {
+
+    var item = lote[i];
+
+    resultado.procesados++;
+
+
 
     try {
-      var raiz = DriveApp.getFolderById(item.id);
-      procesarArbolCaratulas_(
-        raiz,
-        idOrigen,
-        destinoRaiz,
-        ubicacion,
-        caratula,
-        archivoPlantilla,
-        tipo,
-        soloCarpetas,
-        indiceCaratulasCompartidas,
-        cacheCarpetas,
-        logs,
-        resultado,
-        true
-      );
-      resultado.procesados++;
-    } catch (errorRaiz) {
-      resultado.procesados++;
-      resultado.errores.push({ item: item.name, detalle: errorRaiz.message });
-      logs.push(crearFilaActividadCaratulas_(
-        'Google Apps Script - Carátulas',
-        item.name,
-        '❌ Error al recorrer árbol: ' + errorRaiz.message,
-        '',
-        ''
-      ));
-    }
-  });
 
-  resultado.registrosAgregados = escribirLogsCaratulas_(nombreHoja, logs);
+      if (!item || !item.id || !item.name) {
 
-  if (resultado.errores.length) {
-    resultado.status = resultado.pdfsCreados || resultado.carpetasPreparadas
-      ? 'partial'
-      : 'error';
-  }
+        throw new Error('Elemento seleccionado incompleto.');
 
-  resultado.mensaje = construirMensajeCaratulas_(resultado);
-  return resultado;
-}
-
-// ====================================================================
-// 🌳 PROCESAMIENTO RECURSIVO REAL DE CARÁTULAS
-// ====================================================================
-function procesarArbolCaratulas_(
-  folder,
-  idOrigen,
-  destinoRaiz,
-  ubicacion,
-  caratula,
-  archivoPlantilla,
-  tipo,
-  soloCarpetas,
-  indiceCaratulasCompartidas,
-  cacheCarpetas,
-  logs,
-  resultado,
-  esRaizSeleccionada
-) {
-
-  var nombre = String(folder.getName() || '').trim();
-  if (!nombre) return;
-
-  // 1) Mantener exactamente la estructura del origen en destino.
-  var carpetaGuardar = destinoRaiz;
-  var ruta = obtenerRutaDesdeOrigen(folder.getId(), idOrigen);
-
-  if (ubicacion.tipo === 'automatico') {
-    for (var r = 0; r < ruta.length; r++) {
-      carpetaGuardar = getOrCreateFolder(carpetaGuardar, ruta[r], cacheCarpetas);
-    }
-    carpetaGuardar = getOrCreateFolder(carpetaGuardar, nombre, cacheCarpetas);
-  } else {
-    var nombreManual = String(ubicacion.nombreNuevaCarpeta || '').trim();
-    if (nombreManual) {
-      carpetaGuardar = getOrCreateFolder(
-        carpetaGuardar,
-        sanitizarNombreArchivo(nombreManual.toUpperCase()),
-        cacheCarpetas
-      );
-      // Dentro del destino manual se replica el árbol desde la carpeta
-      // seleccionada hacia abajo.
-      var rutaRelativa = construirRutaRelativaAlSeleccionado_(folder, esRaizSeleccionada);
-      for (var m = 0; m < rutaRelativa.length; m++) {
-        carpetaGuardar = getOrCreateFolder(carpetaGuardar, rutaRelativa[m], cacheCarpetas);
       }
-    }
-  }
 
-  resultado.carpetasPreparadas++;
 
-  if (!soloCarpetas) {
-    var filenameFinal = sanitizarNombreArchivo(nombre.toUpperCase()) + '.PDF';
 
-    // 2) Primero reutilizar la carátula central si ya existe.
-    var caratulaCompartida = encontrarCaratulaCompartidaFlexible_(
-      indiceCaratulasCompartidas,
-      nombre
-    );
+      // Nombre de salida; se conserva tal cual viene del elemento seleccionado.
 
-    if (caratulaCompartida) {
-      resultado.omitidos++;
-      resultado.archivosGenerados.push({
-        origen: nombre,
-        id: caratulaCompartida.getId(),
-        url: caratulaCompartida.getUrl(),
-        name: caratulaCompartida.getName()
-      });
+      // ♻️ Reutilizar carátula ya existente en C4 antes de crear carpetas.
+      if (!soloCarpetas) {
+        var caratulaCompartida =
+          obtenerCaratulaCompartidaPorNombre_(
+            indiceCaratulasCompartidas,
+            filenameFinal
+          );
 
-      logs.push(crearFilaActividadCaratulas_(
-        'Google Apps Script - Carátulas',
-        caratulaCompartida.getName(),
-        '♻️ Carátula central reutilizada: ' + nombre,
-        caratulaCompartida.getUrl(),
-        caratulaCompartida.getId()
-      ));
-    } else {
-      // 3) Si no existe en la biblioteca, la generamos una sola vez en C9.
-      var carpetaGeneradas = getOrCreateFolder(
-        carpetaBibliotecaParaGenerar_(caratula),
-        'CARATULAS GENERADAS AUTOMATICAMENTE',
-        cacheCarpetas
-      );
+        if (caratulaCompartida) {
+          resultado.omitidos++;
 
-      var existentesGeneradas = carpetaGeneradas.getFilesByName(filenameFinal);
-      var pdfCreado = null;
+          resultado.archivosGenerados.push({
+            origen: item.name,
+            id: caratulaCompartida.getId(),
+            url: caratulaCompartida.getUrl(),
+            name: caratulaCompartida.getName()
+          });
 
-      if (existentesGeneradas.hasNext()) {
-        var existente = existentesGeneradas.next();
-        pdfCreado = {
-          id: existente.getId(),
-          url: existente.getUrl(),
-          name: existente.getName()
-        };
-        resultado.omitidos++;
-      } else if (archivoPlantilla) {
-        var textoVisual = obtenerTextoVisual(nombre);
-        var prefijo = extraerPrefijoAvanzado(nombre);
-        var textoLimpio = limpiarTextoSinPrefijoAvanzado(nombre);
+          logs.push(crearFilaActividadCaratulas_(
+            'Google Apps Script - Carátulas',
+            caratulaCompartida.getName(),
+            '♻️ Carátula maestra reutilizada',
+            caratulaCompartida.getUrl(),
+            caratulaCompartida.getId()
+          ));
 
-        // Mantiene las reglas especiales que ya tenía tu versión.
-        var rutaNorm = ruta.map(function(x) { return normalizarTexto(x); });
-        var anexoEspecial = rutaNorm.some(function(x) {
-          return x.indexOf('anexo 11') !== -1 || x.indexOf('anexo 13') !== -1;
-        });
+          continue;
+        }
+      }
 
-        if (anexoEspecial && ruta.length === 1 && textoLimpio.length >= 9) {
-          textoLimpio = textoLimpio.slice(-9);
-        } else if (anexoEspecial && ruta.length === 2 && textoLimpio.length > 3) {
-          textoLimpio = textoLimpio.substring(3).trim();
+      var carpetaGuardar = destinoRaiz;
+      var ruta = obtenerRutaDesdeOrigen(item.id, idOrigen);
+
+
+
+      if (ubicacion.tipo === 'automatico') {
+
+        for (var r = 0; r < ruta.length; r++) {
+
+          carpetaGuardar = getOrCreateFolder(
+
+            carpetaGuardar,
+
+            ruta[r],
+
+            cacheCarpetas
+
+          );
+
         }
 
-        pdfCreado = crearPDFDesdePlantilla_(
-          archivoPlantilla,
-          textoLimpio,
-          prefijo,
-          textoVisual,
-          filenameFinal,
-          carpetaGeneradas,
-          tipo
+
+
+        carpetaGuardar = getOrCreateFolder(
+
+          carpetaGuardar,
+
+          item.name,
+
+          cacheCarpetas
+
         );
-        resultado.pdfsCreados++;
+
+      } else {
+
+        var nombreManual = String(
+
+          ubicacion.nombreNuevaCarpeta || ''
+
+        ).trim();
+
+
+
+        if (nombreManual) {
+
+          carpetaGuardar = getOrCreateFolder(
+
+            carpetaGuardar,
+
+            sanitizarNombreArchivo(nombreManual.toUpperCase()),
+
+            cacheCarpetas
+
+          );
+
+        }
+
+      }
+
+
+
+      resultado.carpetasPreparadas++;
+
+
+
+      if (soloCarpetas) {
 
         logs.push(crearFilaActividadCaratulas_(
+
           'Google Apps Script - Carátulas',
-          pdfCreado.name || filenameFinal,
-          '✅ Carátula generada y guardada en C9: ' + nombre,
-          pdfCreado.url,
-          pdfCreado.id
+
+          'CARPETA: ' + item.name,
+
+          '📁 Carpeta preparada o verificada',
+
+          carpetaGuardar.getUrl(),
+
+          carpetaGuardar.getId()
+
         ));
+
+        continue;
+
       }
 
-      if (pdfCreado) {
-        indiceCaratulasCompartidas[normalizarTexto(pdfCreado.name)] = DriveApp.getFileById(pdfCreado.id);
-        resultado.archivosGenerados.push({
-          origen: nombre,
-          id: pdfCreado.id,
-          url: pdfCreado.url,
-          name: pdfCreado.name
-        });
+
+
+      var textoVisual = obtenerTextoVisual(item.name);
+
+      var prefijo = extraerPrefijoAvanzado(item.name);
+
+      var textoLimpio = limpiarTextoSinPrefijoAvanzado(item.name);
+
+      var filenameFinal =
+
+        sanitizarNombreArchivo(item.name.trim().toUpperCase()) + '.PDF';
+
+
+
+      // Conserva las reglas especiales ya usadas en los Anexos 11 y 13.
+
+      if (ruta.length > 0) {
+
+        var primerNivel = normalizarTexto(ruta[0]);
+
+        var esAnexoEspecial =
+
+          primerNivel.indexOf('anexo 11') !== -1 ||
+
+          primerNivel.indexOf('anexo 13') !== -1;
+
+
+
+        if (
+
+          esAnexoEspecial &&
+
+          ruta.length === 1 &&
+
+          textoLimpio.length >= 9
+
+        ) {
+
+          textoLimpio = textoLimpio.slice(-9);
+
+        } else if (
+
+          esAnexoEspecial &&
+
+          ruta.length === 2 &&
+
+          textoLimpio.length > 3
+
+        ) {
+
+          textoLimpio = textoLimpio.substring(3).trim();
+
+        }
+
       }
+
+
+
+      var existentes = carpetaGuardar.getFilesByName(filenameFinal);
+
+
+
+      if (existentes.hasNext()) {
+
+        var existente = existentes.next();
+
+        resultado.omitidos++;
+
+
+
+        logs.push(crearFilaActividadCaratulas_(
+
+          'Google Apps Script - Carátulas',
+
+          filenameFinal,
+
+          '⏭️ Carátula omitida: ya existía',
+
+          existente.getUrl(),
+
+          existente.getId()
+
+        ));
+
+        continue;
+
+      }
+
+
+
+      var pdfCreado = crearPDFDesdePlantilla_(
+
+        archivoPlantilla,
+
+        textoLimpio,
+
+        prefijo,
+
+        textoVisual,
+
+        filenameFinal,
+
+        carpetaGuardar,
+
+        tipo
+
+      );
+
+
+
+      resultado.pdfsCreados++;
+
+
+
+      resultado.archivosGenerados.push({ // 👈 NUEVO
+
+        origen: item.name,
+
+        id: pdfCreado.id,
+
+        url: pdfCreado.url,
+
+        name: pdfCreado.name
+
+      });
+
+
+
+      logs.push(crearFilaActividadCaratulas_(
+
+        'Google Apps Script - Carátulas',
+
+        pdfCreado.name || filenameFinal,
+
+        '✅ Carátula creada',
+
+        pdfCreado.url,
+
+        pdfCreado.id
+
+      ));
+
+
+
+    } catch (error) {
+
+      var nombreError = item && item.name
+
+        ? String(item.name)
+
+        : 'Sin nombre';
+
+
+
+      resultado.errores.push({
+
+        item: nombreError,
+
+        detalle: error.message
+
+      });
+
+
+
+      logs.push(crearFilaActividadCaratulas_(
+
+        'Google Apps Script - Carátulas',
+
+        nombreError,
+
+        '❌ Error al procesar: ' + error.message,
+
+        '',
+
+        ''
+
+      ));
+
     }
+
   }
 
-  // 4) Recorrer todas las subcarpetas en su orden numérico natural.
-  var subcarpetas = [];
-  var it = folder.getFolders();
-  while (it.hasNext()) subcarpetas.push(it.next());
-  subcarpetas.sort(compararCarpetaCaratulaRecursiva_);
 
-  subcarpetas.forEach(function(sub) {
-    procesarArbolCaratulas_(
-      sub,
-      idOrigen,
-      destinoRaiz,
-      ubicacion,
-      caratula,
-      archivoPlantilla,
-      tipo,
-      soloCarpetas,
-      indiceCaratulasCompartidas,
-      cacheCarpetas,
-      logs,
-      resultado,
-      false
-    );
-  });
-}
 
-function carpetaBibliotecaParaGenerar_(configCaratula) {
-  var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
-  var idBiblioteca = obtenerIdBibliotecaCaratulas_(nombreHoja);
-  return DriveApp.getFolderById(idBiblioteca);
-}
+  resultado.registrosAgregados = escribirLogsCaratulas_(
 
-function extraerNumeroCaratulaRecursiva_(nombre) {
-  var texto = String(nombre || '').trim();
-  var m = texto.match(/^(?:0*)(\d+(?:\.\d+)*)\s*(?:[.\-_:)]+)?/);
-  if (!m) return null;
-  return m[1].split('.').map(function(v) { return Number(v); });
-}
+    nombreHoja,
 
-function compararCarpetaCaratulaRecursiva_(a, b) {
-  var na = extraerNumeroCaratulaRecursiva_(a.getName());
-  var nb = extraerNumeroCaratulaRecursiva_(b.getName());
+    logs
 
-  if (na && nb) {
-    var len = Math.max(na.length, nb.length);
-    for (var i = 0; i < len; i++) {
-      var va = na[i] === undefined ? -1 : na[i];
-      var vb = nb[i] === undefined ? -1 : nb[i];
-      if (va !== vb) return va - vb;
-    }
-  } else if (na && !nb) {
-    return -1;
-  } else if (!na && nb) {
-    return 1;
+  );
+
+
+
+  if (resultado.errores.length) {
+
+    resultado.status = resultado.pdfsCreados ||
+
+      resultado.carpetasPreparadas
+
+      ? 'partial'
+
+      : 'error';
+
   }
 
-  return a.getName().localeCompare(b.getName(), 'es', {
-    numeric: true,
-    sensitivity: 'base'
-  });
+
+
+  resultado.mensaje = construirMensajeCaratulas_(resultado);
+
+  return resultado;
+
 }
-
-function construirRutaRelativaAlSeleccionado_(folder, esRaiz) {
-  if (esRaiz) return [];
-  var salida = [];
-  var actual = folder;
-  var seguridad = 0;
-
-  while (seguridad++ < 100) {
-    var padres = actual.getParents();
-    if (!padres.hasNext()) break;
-    var padre = padres.next();
-    if (!padre) break;
-    salida.unshift(actual.getName());
-    actual = padre;
-    if (normalizarTexto(actual.getName()) === '') break;
-  }
-
-  if (salida.length) salida.pop();
-  return salida;
-}
-
-// Índice compatible con la biblioteca de C9, pero con coincidencia flexible.
-function encontrarCaratulaCompartidaFlexible_(indice, nombreCarpeta) {
-  if (!indice || !nombreCarpeta) return null;
-
-  var objetivo = normalizarTexto(nombreCarpeta);
-  var exacta = indice[objetivo + '.pdf'] || indice[objetivo + ' pdf'];
-  if (exacta) return exacta;
-
-  var claveObjetivo = claveNombreCaratula_(nombreCarpeta);
-  var mejor = null;
-  var mejorPuntaje = 0;
-
-  Object.keys(indice).forEach(function(clave) {
-    var archivo = indice[clave];
-    var nombre = archivo.getName();
-    var claveArchivo = claveNombreCaratula_(nombre);
-    var puntaje = puntuarNombreCaratula_(claveObjetivo, claveArchivo);
-    if (puntaje > mejorPuntaje) {
-      mejorPuntaje = puntaje;
-      mejor = archivo;
-    }
-  });
-
-  return mejorPuntaje >= 60 ? mejor : null;
-}
-
-function claveNombreCaratula_(nombre) {
-  var s = normalizarTexto(String(nombre || ''))
-    .replace(/\.(pdf|docx?|pptx?)$/i, '')
-    .replace(/^\d+(?:\.\d+)*[\s._:-]*/,'')
-    .replace(/\b(caratula|caratulas|cover|portada)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return s;
-}
-
-function puntuarNombreCaratula_(a, b) {
-  if (!a || !b) return 0;
-  if (a === b) return 100;
-  if (a.indexOf(b) !== -1 || b.indexOf(a) !== -1) return 90;
-
-  var wa = a.split(/\s+/).filter(Boolean);
-  var wb = b.split(/\s+/).filter(Boolean);
-  var comunes = 0;
-  wa.forEach(function(x) {
-    if (x.length >= 3 && wb.indexOf(x) !== -1) comunes++;
-  });
-
-  if (!wa.length) return 0;
-  return (comunes / Math.max(wa.length, wb.length)) * 100;
-}
-
 
 
 
@@ -1002,69 +1056,116 @@ function crearCarpetaLibre(nombreCarpeta) {
 
 
 function restaurarCaratulasBase(
+
   idPlantillaElegida,
+
   tipoCaratulaElegido
+
 ) {
+
   var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
-  // Dos destinos posibles: C9 (exclusiva para Anexo 11 y 13) y C4
-  // (biblioteca general, donde el compilador busca todo lo demás).
-  var idBibliotecaAnexos = obtenerIdBibliotecaCaratulas_(nombreHoja); // C9
-  var idBibliotecaGeneral = obtenerIdDesdeHoja('C4', nombreHoja);      // C4
+
+  var idDestino = obtenerIdBibliotecaCaratulas_(nombreHoja);
 
   var idPlantilla = idPlantillaElegida ||
+
     extraerIdDeCeldaSegura(nombreHoja, 'C3');
 
   var plantilla = obtenerArchivoPlantillaDesdeId(idPlantilla);
 
   var tipo = tipoCaratulaElegido === 'nueva'
+
     ? 'nueva'
+
     : 'original';
 
+  var destino = DriveApp.getFolderById(idDestino);
+
   var cache = {};
+
   var logs = [];
 
+
+
   var grupos = [
+
     {
-      destinoId: idBibliotecaAnexos, // C9
+
       carpeta: 'CARATULAS ANEXO 11 (NO BORRAR)',
+
       nombres: [
+
         '1. Ficha Diagnostico Tecnico Legal',
+
         '1.1 Plan de Saneamiento Fisico Legal',
+
         '2. Planos Diagnostico Tecnico Legal',
+
         '3. Certificado de Busqueda Catastral General',
+
         '4. Ficha Reniec',
+
         '5. Informe Tecnico Diagnostico',
+
         '6. Documento Legal',
+
       ]
+
     },
+
     {
-      destinoId: idBibliotecaAnexos, // C9
+
       carpeta: 'CARATULAS ANEXO 13 (NO BORRAR)',
+
       nombres: [
+
         '1. FICHA SOCIOECONÓMICA',
+
         '2. FICHA TÉCNICA',
+
         '3. MEMORIA DESCRIPTIVA',
+
         '4. PLANOS',
+
         '5. DOC. DEL SUJETO PASIVO',
+
         '5.1. FICHA RENIEC',
+
         '5.1. FICHA RUC',
+
         '5.2. CONSTANCIA DE POSESIÓN',
+
         '5.2. DECLARACIÓN JURADA',
+
         '5.2. PARTIDA REGISTRAL',
+
         '6. INFORME TÉCNICO DE TASACIÓN'
+
       ]
+
     },
+
     {
-      destinoId: idBibliotecaGeneral, // C4 (el compilador la busca ahí)
+
       carpeta: 'CARATULAS EXPEDIENTE DIAGNOSTICO (NO BORRAR)',
+
       nombres: [
+
         '1. Ficha Diag. Tec. Legal',
+
         '2. Planos Diag. Tec. Legal',
+
         '3. Cert. de Busq. Catastral',
+
         '4. Ficha Ruc'
+
       ]
+
     }
+
   ];
+
+
 
   var creadas = 0;
 
