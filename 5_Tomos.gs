@@ -4,61 +4,144 @@
 
 var ID_SELECCION_MANUAL_TOMOS = 'SELECCION_MANUAL_PDF';
 
+function obtenerCarpetaCompiladosParaTomos_() {
+  // TOMOS debe leer los PDF ya COMPILADOS por el módulo 4.
+  // La carpeta fuente se obtiene de COMPILADOS!C6 (misma celda usada por el compilador).
+  var hojaCompilados = obtenerHojaSegura(CONFIG_SISTEMA.HOJA_COMPILADOS);
+  var idDestino = obtenerIdDesdeHoja('C6', CONFIG_SISTEMA.HOJA_COMPILADOS);
+  if (!idDestino) {
+    throw new Error('No se encontró la carpeta de COMPILADOS configurada en COMPILADOS!C6.');
+  }
+  return DriveApp.getFolderById(idDestino);
+}
+
+function normalizarClaveNombreTomo_(nombre) {
+  return normalizarTexto(String(nombre || '')
+    .replace(/\.pdf$/i, '')
+    .replace(/^compilado[_\s\-:]*/i, '')
+    .replace(/\s*\(\d{8}_\d{6}_\d{3}_\d+\)\s*$/i, '')
+    .trim());
+}
+
+function buscarCompiladosParaTomo_(carpetaRaiz, nombreCarpeta) {
+  var objetivo = normalizarClaveNombreTomo_(nombreCarpeta);
+  var candidatos = [];
+  var prefijo = normalizarTexto('COMPILADO_' + String(nombreCarpeta || '').trim());
+
+  function recorrer(folder) {
+    var archivos = folder.getFilesByType(MimeType.PDF);
+    while (archivos.hasNext()) {
+      var file = archivos.next();
+      if (file.isTrashed()) continue;
+      var nombre = file.getName();
+      var clave = normalizarClaveNombreTomo_(nombre);
+      var nombreNorm = normalizarTexto(nombre.replace(/\.pdf$/i, ''));
+
+      // Primero exigimos el prefijo COMPILADO_. Esto evita que TOMOS
+      // tome carátulas u otros PDF almacenados en la misma biblioteca.
+      var coincide = nombreNorm.indexOf(prefijo) === 0;
+      if (!coincide && objetivo) {
+        // Compatibilidad para compilados creados con el nombre antiguo:
+        // COMPILADO + nombre sin separador.
+        coincide = clave === objetivo && nombreNorm.indexOf('compilado') === 0;
+      }
+      if (coincide) candidatos.push(file);
+    }
+
+    var subs = folder.getFolders();
+    while (subs.hasNext()) recorrer(subs.next());
+  }
+
+  recorrer(carpetaRaiz);
+
+  // Si hubo varias versiones, TOMOS debe tomar la última versión generada.
+  candidatos.sort(function(a, b) {
+    var ta = a.getLastUpdated().getTime();
+    var tb = b.getLastUpdated().getTime();
+    if (tb !== ta) return tb - ta;
+    return a.getName().localeCompare(b.getName(), 'es', { numeric: true, sensitivity: 'base' });
+  });
+
+  return candidatos.length ? candidatos[0] : null;
+}
+
+function contarPaginasCompiladoTomo_(file) {
+  var paginas = extraerPaginasDelNombre_(file.getName());
+  if (paginas) return paginas;
+
+  try {
+    var conteo = obtenerPaginasDePdf(file.getId());
+    if (conteo && conteo.length && Number(conteo[0].paginas) > 0) {
+      return Number(conteo[0].paginas);
+    }
+  } catch (error) {
+    console.warn('No se pudo contar páginas de ' + file.getName() + ': ' + error.message);
+  }
+  return 0;
+}
+
 function procesarCalculoMatematico(seleccionados, config) {
   var filtrados = filtrarSeleccionadosMasEspecificos(seleccionados);
   var archivos = [];
   var omitidos = [];
   var idsVistos = {};
 
+  // IMPORTANTE:
+  // Los TOMOS ya no leen los PDF originales de C2.
+  // Leen exclusivamente los COMPILADOS que produjo 4_Compilador.gs.
+  var carpetaCompilados = obtenerCarpetaCompiladosParaTomos_();
+
   filtrados.forEach(function(sel) {
     if (sel.id === ID_SELECCION_MANUAL_TOMOS) return;
+
     var infoAnexo = extraerInfoAnexo_(sel.name);
-    var carpeta = DriveApp.getFolderById(sel.id);
+    var compilado = buscarCompiladosParaTomo_(carpetaCompilados, sel.name);
 
-    var nivel = (config && config.nivelProfundidad) ? config.nivelProfundidad : 'general';
-    var encontrados;
-    if (nivel === 'general') {
-      encontrados = listarPdfsRecursivo(carpeta, [sel.name]);
-    } else {
-      var nivelNum = parseInt(nivel, 10);
-      if (isNaN(nivelNum) || nivelNum < 1) nivelNum = 1;
-      encontrados = listarPdfsHastaNivel(carpeta, [sel.name], nivelNum);
-    }
-
-    encontrados.forEach(function(item) {
-      var file = item.file;
-      if (idsVistos[file.getId()]) return;
-      idsVistos[file.getId()] = true;
-
-      var paginas = extraerPaginasDelNombre_(file.getName());
-      if (!paginas) {
-        omitidos.push({
-          id: file.getId(),
-          nombre: file.getName(),
-          url: file.getUrl(),
-          carpetaOrigen: sel.name,
-          carpetaOrigenId: sel.id,
-          ruta: item.path.join(' / '),
-          motivo: 'El nombre no contiene una cantidad de páginas reconocible.'
-        });
-        return;
-      }
-
-      archivos.push({
-        id: file.getId(),
-        nombreOriginal: file.getName(),
-        esNumerado: infoAnexo.esNumerado,
-        segmentos: infoAnexo.segmentos.slice(),
-        numAnexoStr: infoAnexo.numAnexoStr,
-        descAnexo: infoAnexo.descAnexo,
-        paginasFisicas: paginas,
-        paginasFoleo: paginas,
-        tamano: Number(file.getSize()) || 0,
-        actualizadoMs: file.getLastUpdated().getTime(),
+    if (!compilado) {
+      omitidos.push({
+        id: '',
+        nombre: 'COMPILADO_' + String(sel.name || '').trim(),
+        url: '',
         carpetaOrigen: sel.name,
         carpetaOrigenId: sel.id,
-        ruta: item.path.join(' / ')
+        ruta: sel.name,
+        motivo: 'No se encontró el PDF compilado correspondiente en la carpeta configurada en COMPILADOS!C6.'
       });
+      return;
+    }
+
+    if (idsVistos[compilado.getId()]) return;
+    idsVistos[compilado.getId()] = true;
+
+    var paginas = contarPaginasCompiladoTomo_(compilado);
+    if (!paginas) {
+      omitidos.push({
+        id: compilado.getId(),
+        nombre: compilado.getName(),
+        url: compilado.getUrl(),
+        carpetaOrigen: sel.name,
+        carpetaOrigenId: sel.id,
+        ruta: sel.name,
+        motivo: 'Se encontró el compilado, pero no se pudo determinar su cantidad de páginas.'
+      });
+      return;
+    }
+
+    archivos.push({
+      id: compilado.getId(),
+      nombreOriginal: compilado.getName(),
+      esNumerado: infoAnexo.esNumerado,
+      segmentos: infoAnexo.segmentos.slice(),
+      numAnexoStr: infoAnexo.numAnexoStr,
+      descAnexo: infoAnexo.descAnexo,
+      paginasFisicas: paginas,
+      paginasFoleo: paginas,
+      tamano: Number(compilado.getSize()) || 0,
+      actualizadoMs: compilado.getLastUpdated().getTime(),
+      carpetaOrigen: sel.name,
+      carpetaOrigenId: sel.id,
+      ruta: sel.name,
+      esCompilado: true
     });
   });
 
@@ -69,10 +152,7 @@ function procesarCalculoMatematico(seleccionados, config) {
     try {
       var file = DriveApp.getFileById(p.id);
       var paginas = extraerPaginasDelNombre_(file.getName()) || Number(p.paginas) || 0;
-      if (!paginas) {
-        var conteo = obtenerPaginasDePdf(file.getId());
-        if (conteo.length && conteo[0].paginas > 0) paginas = conteo[0].paginas;
-      }
+      if (!paginas) paginas = contarPaginasCompiladoTomo_(file);
       if (!paginas) {
         omitidos.push({
           id: p.id,
@@ -129,7 +209,6 @@ function procesarCalculoMatematico(seleccionados, config) {
 
   var tomos = [];
   var actual = crearTomoVacio_(1);
-  // 👇 FIX: ahora la capacidad respeta config.paginasPorTomo si viene desde la interfaz
   var capacidadContenido = obtenerCapacidadContenidoTomo_(config);
 
   archivosAuto.forEach(function(pdf) {
@@ -142,7 +221,6 @@ function procesarCalculoMatematico(seleccionados, config) {
 
   if (actual.archivos.length) tomos.push(actual);
 
-  // 👇 FIX: se propaga config para que también respete el límite manual al fusionar tomos pequeños
   tomos = absorberTomosPequenosSeguro_(tomos, config);
 
   if (archivosManual.length) {
@@ -152,7 +230,6 @@ function procesarCalculoMatematico(seleccionados, config) {
     tomos.push(tomoManual);
   }
 
-  // 👇 FIX: se propaga config para que excedeLimite se calcule contra el límite correcto
   recalcularTomos_(tomos, config);
   return { tomos: tomos, omitidos: omitidos };
 }
