@@ -1151,11 +1151,11 @@ function restaurarCaratulasBase(
 
       nombres: [
 
-        '1. Ficha Diag. Tec. Legal',
+        '1. Ficha Diagnostico Tecnico Legal',
 
-        '2. Planos Diag. Tec. Legal',
+        '2. Planos Diagnostico Tecnico Legal',
 
-        '3. Cert. de Busq. Catastral',
+        '3. Certificado de Busqueda Catastral',
 
         '4. Ficha Ruc'
 
