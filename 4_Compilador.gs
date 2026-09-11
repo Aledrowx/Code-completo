@@ -56,17 +56,20 @@ function extraerTodasLasCaratulas_(carpeta) {
 }
 
 function encontrarCaratulaPorCarpeta_(nombreCarpeta, listaCaratulas, permitirParcial) {
-  var nombreNorm = normalizarTexto(limpiarNombrePDF(nombreCarpeta));
+  // simplificar() deja solo letras y números (quita puntos, comas, espacios,
+  // guiones...) para que "Cert. de Busq. Catastral" y "Cert de Busq Catastral"
+  // (o "CERT.DE BUSQ.CATASTRAL") se reconozcan como el mismo nombre.
+  var nombreNorm = simplificar(limpiarNombrePDF(nombreCarpeta));
   if (!nombreNorm) return null;
 
   for (var i = 0; i < listaCaratulas.length; i++) {
-    var coverNorm = normalizarTexto(limpiarNombrePDF(listaCaratulas[i].name));
+    var coverNorm = simplificar(limpiarNombrePDF(listaCaratulas[i].name));
     if (coverNorm === nombreNorm) return listaCaratulas[i];
   }
 
   if (permitirParcial) {
     for (var j = 0; j < listaCaratulas.length; j++) {
-      var parcialNorm = normalizarTexto(limpiarNombrePDF(listaCaratulas[j].name));
+      var parcialNorm = simplificar(limpiarNombrePDF(listaCaratulas[j].name));
       if (parcialNorm && (parcialNorm.indexOf(nombreNorm) !== -1 || nombreNorm.indexOf(parcialNorm) !== -1)) {
         return listaCaratulas[j];
       }
