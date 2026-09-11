@@ -76,25 +76,12 @@ function encontrarCaratulaPorCarpeta_(nombreCarpeta, listaCaratulas, permitirPar
   return null;
 }
 
-// ====================================================================
-// 📚 C9 — BIBLIOTECA DE CARÁTULAS EXCLUSIVA PARA ANEXO 11 Y ANEXO 13
-// ====================================================================
-// C4 sigue siendo la biblioteca general (carátula principal de cada
-// predio/carpeta, y las carátulas de carpeta en compilaciones normales).
-// C9 es una biblioteca aparte que solo se usa para las carátulas macro
-// y de bloque de los Anexos 11 y 13 (de ahí se leen en el orden que
-// tienen sus subcarpetas y se enlazan a los PDF correspondientes).
-// ====================================================================
-function obtenerIdBibliotecaCaratulas_(nombreHoja) {
-  return obtenerIdDesdeHoja('C9', nombreHoja);
-}
-
 function obtenerDatosParaCompilar(seleccionados) {
   var nombreHoja = CONFIG_SISTEMA.HOJA_COMPILADOS;
   var idC2 = obtenerIdDesdeHoja('C2', nombreHoja);
   var idC4 = obtenerIdDesdeHoja('C4', nombreHoja);
   var idC6 = obtenerIdDesdeHoja('C6', nombreHoja);
-  var idBibliotecaAnexos = obtenerIdBibliotecaCaratulas_(nombreHoja); // C9, solo Anexo 11 y 13
+  var idBiblioteca = obtenerIdBibliotecaCaratulas_(nombreHoja);
   var filtrados = filtrarSeleccionadosMasEspecificos(seleccionados);
 
   if (!filtrados.length) throw new Error('No quedaron carpetas válidas después de eliminar selecciones duplicadas padre/hijo.');
@@ -103,10 +90,7 @@ function obtenerDatosParaCompilar(seleccionados) {
     return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
   });
 
-  // Dos bibliotecas independientes: C4 para todo lo general (como antes),
-  // C9 exclusivamente para Anexo 11 y Anexo 13.
-  var caratulasGenerales = extraerTodasLasCaratulas_(DriveApp.getFolderById(idC4));
-  var caratulasAnexos = extraerTodasLasCaratulas_(DriveApp.getFolderById(idBibliotecaAnexos));
+  var caratulas = extraerTodasLasCaratulas_(DriveApp.getFolderById(idBiblioteca));
   var compilaciones = [];
   var caratulasMacroUsadas = {};
 
@@ -121,13 +105,12 @@ function obtenerDatosParaCompilar(seleccionados) {
 
     // En los Anexos 11 y 13, la carátula general del anexo se incorpora
     // una sola vez y únicamente en el primer código real del grupo.
-    // Esta carátula macro se busca SOLO en la biblioteca de C9.
     if (
       grupo &&
       !caratulasMacroUsadas[grupo] &&
       esPrimerCodigoRealAnexoEspecial_(sel.id, idC2, grupo)
     ) {
-      var macro = buscarCaratulaMacroAnexo_(grupo, primerOrden, caratulasAnexos);
+      var macro = buscarCaratulaMacroAnexo_(grupo, primerOrden, caratulas);
 
       if (macro) {
         secuencia.push({
@@ -144,12 +127,10 @@ function obtenerDatosParaCompilar(seleccionados) {
       }
     }
 
-    // La carátula principal de cada carpeta/predio se sigue buscando
-    // (y generando si falta) en C4, igual que siempre.
-    var principal = encontrarCaratulaPorCarpeta_(sel.name, caratulasGenerales, false);
+    var principal = encontrarCaratulaPorCarpeta_(sel.name, caratulas, false);
 
     if (!principal) {
-      principal = generarCaratulaPrincipalFaltante_(sel.name, idC4, nombreHoja, caratulasGenerales);
+      principal = generarCaratulaPrincipalFaltante_(sel.name, idBiblioteca, nombreHoja, caratulas);
       if (!principal) {
         alertas.push('⚠️ No se pudo generar la carátula principal de "' + sel.name + '"');
       }
@@ -163,17 +144,19 @@ function obtenerDatosParaCompilar(seleccionados) {
       });
     }
 
-    if (grupo === 'ANEXO 11' || grupo === 'ANEXO 13') {
-      // El orden real sale de la estructura del expediente en C2.
-      // C9 solo aporta la carátula que corresponda al nombre de cada carpeta.
+    if (grupo === 'ANEXO 11') {
+      var resultado11 = construirSecuenciaAnexo11_(origen, caratulas);
+      secuencia = secuencia.concat(resultado11.archivos);
+      if (resultado11.alerta) alertas.push(resultado11.alerta);
+    } else if (grupo === 'ANEXO 13') {
       secuencia = secuencia.concat(
-        construirSecuenciaAnexoDinamica_(origen, caratulasAnexos)
+        rastrearAnexo13_(origen, true, false, caratulas)
       );
     } else {
-      secuencia = secuencia.concat(rastrearGenerico_(origen, true, caratulasGenerales));
+      secuencia = secuencia.concat(rastrearGenerico_(origen, true, caratulas));
     }
 
-    secuencia = eliminarDuplicadosConsecutivos_(secuencia);
+    secuencia = eliminarDuplicadosPorId_(secuencia);
     compilaciones.push({
       nombreCarpeta: sel.name,
       archivos: secuencia,
@@ -189,10 +172,10 @@ function obtenerDatosParaCompilar(seleccionados) {
 // 🏷️ CARÁTULA PRINCIPAL FALTANTE — se genera al vuelo y se cachea
 // ====================================================================
 // Si un predio/código no tiene su carátula principal pre-generada en la
-// biblioteca general (C4), en vez de omitirla (dejando el compilado sin
-// portada), se genera aquí mismo con la plantilla de C3 y se guarda
-// dentro de C4 para que la próxima compilación la reutilice sin volver
-// a crearla.
+// biblioteca, en vez de omitirla (dejando el compilado sin portada), se
+// genera aquí mismo con la plantilla de C3 y se guarda dentro de la
+// biblioteca (C9) para que la próxima compilación la reutilice sin
+// volver a crearla.
 // ====================================================================
 function generarCaratulaPrincipalFaltante_(nombreCarpeta, idBiblioteca, nombreHoja, caratulas) {
   try {
@@ -425,166 +408,6 @@ function construirSecuenciaAnexo11_(origen, caratulas) {
   };
 }
 
-// ====================================================================
-// 🆕 ANEXOS 11/13 — RECORRIDO DINÁMICO DEL ÁRBOL DE ORIGEN
-// ====================================================================
-// C2 es la fuente de verdad para el contenido y el orden.
-// C9 solo aporta carátulas ya existentes.
-// No se inventan números faltantes y no se fija una cantidad de páginas.
-// ====================================================================
-function extraerNumeroInicialDinamico_(nombre) {
-  var texto = String(nombre || '').trim();
-  var m = texto.match(/^(?:0*)(\d+(?:\.\d+)*)\s*(?:[.\-_:)]+)?/);
-  if (!m) return null;
-  return m[1].split('.').map(function(v) { return Number(v); });
-}
-
-function compararCarpetaDinamica_(a, b) {
-  var na = extraerNumeroInicialDinamico_(a.getName());
-  var nb = extraerNumeroInicialDinamico_(b.getName());
-
-  if (na && nb) {
-    var len = Math.max(na.length, nb.length);
-    for (var i = 0; i < len; i++) {
-      var va = na[i] === undefined ? -1 : na[i];
-      var vb = nb[i] === undefined ? -1 : nb[i];
-      if (va !== vb) return va - vb;
-    }
-  } else if (na && !nb) {
-    return -1;
-  } else if (!na && nb) {
-    return 1;
-  }
-
-  return a.getName().localeCompare(b.getName(), 'es', {
-    numeric: true,
-    sensitivity: 'base'
-  });
-}
-
-function obtenerSubcarpetasDinamicas_(folder) {
-  var salida = [];
-  var it = folder.getFolders();
-  while (it.hasNext()) salida.push(it.next());
-  salida.sort(compararCarpetaDinamica_);
-  return salida;
-}
-
-function obtenerCaratulaDinamicaPorCarpeta_(nombreCarpeta, caratulasAnexos) {
-  if (!nombreCarpeta || !caratulasAnexos || !caratulasAnexos.length) return null;
-
-  var objetivo = claveNombreDinamica_(nombreCarpeta);
-  var exacta = null;
-  var mejor = null;
-  var mejorPuntaje = 0;
-
-  for (var i = 0; i < caratulasAnexos.length; i++) {
-    var cover = caratulasAnexos[i];
-    var nombre = String(cover.name || '');
-    var nombreNorm = normalizarTexto(limpiarNombrePDF(nombre));
-    var carpetaNorm = normalizarTexto(limpiarNombrePDF(nombreCarpeta));
-
-    if (nombreNorm === carpetaNorm) {
-      exacta = cover;
-      break;
-    }
-
-    var clave = claveNombreDinamica_(nombre);
-    var puntaje = puntuarCoincidenciaCaratulaDinamica_(objetivo, clave, nombreCarpeta, nombre);
-    if (puntaje > mejorPuntaje) {
-      mejorPuntaje = puntaje;
-      mejor = cover;
-    }
-  }
-
-  return exacta || (mejorPuntaje >= 55 ? mejor : null);
-}
-
-function claveNombreDinamica_(nombre) {
-  return normalizarTexto(String(nombre || ''))
-    .replace(/\.pdf$/i, '')
-    .replace(/^\s*\d+(?:\.\d+)*[\s._:-]*/, '')
-    .replace(/\b(caratula|caratulas|cover|portada|anexo)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function puntuarCoincidenciaCaratulaDinamica_(objetivo, candidato, nombreCarpeta, nombreCover) {
-  if (!objetivo || !candidato) return 0;
-  if (objetivo === candidato) return 100;
-  if (candidato.indexOf(objetivo) !== -1 || objetivo.indexOf(candidato) !== -1) return 90;
-
-  var a = objetivo.split(/\s+/).filter(Boolean);
-  var b = candidato.split(/\s+/).filter(Boolean);
-  var comunes = 0;
-  a.forEach(function(w) {
-    if (w.length >= 3 && b.indexOf(w) !== -1) comunes++;
-  });
-
-  var cobertura = comunes / Math.max(a.length, b.length);
-  var numeroA = extraerNumeroInicialDinamico_(nombreCarpeta);
-  var numeroB = extraerNumeroInicialDinamico_(nombreCover);
-  var bonoNumero = numeroA && numeroB && numeroA.join('.') === numeroB.join('.') ? 15 : 0;
-  return cobertura * 100 + bonoNumero;
-}
-
-
-function agregarPDFDirectosDinamicos_(folder, secuencia) {
-  var files = [];
-  var it = folder.getFilesByType(MimeType.PDF);
-  while (it.hasNext()) files.push(it.next());
-  ordenarFiles_(files);
-
-  files.forEach(function(file) {
-    secuencia.push({
-      id: file.getId(),
-      name: file.getName(),
-      type: 'Original'
-    });
-  });
-}
-
-function construirSecuenciaAnexoDinamica_(origen, caratulasAnexos) {
-  var secuencia = [];
-
-  function recorrerContenido(folder) {
-    // PDFs directamente dentro de esta carpeta.
-    agregarPDFDirectosDinamicos_(folder, secuencia);
-
-    // Subcarpetas ordenadas por su numeración real.
-    var subcarpetas = obtenerSubcarpetasDinamicas_(folder);
-
-    subcarpetas.forEach(function(sub) {
-      var inicio = secuencia.length;
-      var cover = obtenerCaratulaDinamicaPorCarpeta_(sub.getName(), caratulasAnexos);
-
-      // La carátula acompaña a la carpeta, no al árbol de C9.
-      if (cover) {
-        secuencia.push({
-          id: cover.id,
-          name: cover.name,
-          type: 'Carátula Carpeta (C9)'
-        });
-      }
-
-      recorrerContenido(sub);
-
-      // Una carpeta totalmente vacía no debe introducir una carátula sola.
-      if (cover && secuencia.length === inicio + 1) {
-        secuencia.pop();
-      }
-    });
-  }
-
-  recorrerContenido(origen);
-  return secuencia;
-}
-
-// Compatibilidad con código anterior del proyecto.
-function construirSecuenciaAnexo11Dinamica_(origen, caratulasAnexos) {
-  return construirSecuenciaAnexoDinamica_(origen, caratulasAnexos);
-}
-
 function agregarBloque_(secuencia, files, caratulas, patronCaratula) {
   if (!files.length) return;
   var cover = buscarCaratulaPorContenidoNorm_(caratulas, patronCaratula);
@@ -717,14 +540,10 @@ function procesarCompilacionSegunModo(seleccionados, metodo, config) {
   var limitePaginas = obtenerValorConfigCompilador_('LIMITE_PAGINAS', 600);
   var paralelas = obtenerValorConfigCompilador_('PETICIONES_PARALELAS', 2);
   var estricto = Boolean(obtenerValorConfigSistema_('MODO_ESTRICTO_COMPILADOR', true));
+  var cacheCarpetas = {};
   var solicitudes = [];
   var referencias = [];
   var omitidos = 0;
-
-  // 👇 CAMBIO: se guarda directamente en la carpeta asignada a C6,
-  // ya no se crea una subcarpeta por cada "folderPrimerOrden".
-  // De ahí es de donde Tomos jala los compilados.
-  var destino = DriveApp.getFolderById(datos.idC6);
 
   datos.compilaciones.forEach(function(comp, indice) {
     var fileIds = [];
@@ -740,6 +559,8 @@ function procesarCompilacionSegunModo(seleccionados, metodo, config) {
       return;
     }
 
+    var destinoRaiz = DriveApp.getFolderById(datos.idC6);
+    var destino = getOrCreateFolder(destinoRaiz, comp.folderPrimerOrden, cacheCarpetas);
     var nombreBase = sanitizarNombreArchivo('COMPILADO_' + comp.nombreCarpeta.toUpperCase());
     var existentes = obtenerCompiladosExistentes_(destino, nombreBase);
 
