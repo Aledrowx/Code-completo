@@ -95,6 +95,21 @@ function obtenerIdDesdeHoja(celda, nombreHoja) {
   return id;
 }
 
+// ====================================================================
+// 📚 BIBLIOTECA FIJA DE CARÁTULAS (independiente de la carpeta de destino)
+// ====================================================================
+// C9 debe apuntar SIEMPRE a la misma carpeta de Drive, sin importar
+// cuántas veces cambies el destino de compilados en C4. Así, si cambias
+// de proyecto o de carpeta de destino, tus carátulas base (Anexo 11,
+// Anexo 13, Expediente Diagnóstico) siguen encontrándose sin regenerar
+// nada. Si C9 está vacía, se usa C4 como respaldo (comportamiento anterior).
+// ====================================================================
+function obtenerIdBibliotecaCaratulas_(nombreHoja) {
+  var idBiblioteca = extraerIdDeCeldaSegura(nombreHoja, 'C9');
+  if (idBiblioteca) return idBiblioteca;
+  return obtenerIdDesdeHoja('C4', nombreHoja);
+}
+
 function obtenerSubcarpetas(folderId) {
   try {
     var carpeta = DriveApp.getFolderById(folderId);
