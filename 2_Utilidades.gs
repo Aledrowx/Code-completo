@@ -217,17 +217,63 @@ function limpiarTextoSinPrefijoAvanzado(nombre) {
     .trim();
 }
 
+// ====================================================================
+// 📝 EXPANDIR ABREVIATURAS PARA TEXTO VISUAL DE CARÁTULAS
+// ====================================================================
+function expandirNombreCaratula_(texto) {
+  var t = String(texto || '').trim();
+
+  if (!t) return '';
+
+  t = t
+    .replace(/\bDIAG\.?(?=\s|$)/gi, 'DIAGNÓSTICO')
+    .replace(/\bTEC\.?(?=\s|$)/gi, 'TÉCNICO')
+    .replace(/\bCERT\.?(?=\s|$)/gi, 'CERTIFICADO')
+    .replace(/\bBUSQ\.?(?=\s|$)/gi, 'BÚSQUEDA')
+    .replace(/\bDOC\.?(?=\s|$)/gi, 'DOCUMENTO')
+    .replace(/\bINF\.?(?=\s|$)/gi, 'INFORME')
+    .replace(/\bREG\.?(?=\s|$)/gi, 'REGISTRO')
+    .replace(/\bFOT\.?(?=\s|$)/gi, 'FOTOGRÁFICO')
+    .replace(/\bSOCIOEC\.?(?=\s|$)/gi, 'SOCIOECONÓMICA')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return t;
+}
+
+// ====================================================================
+// 👁️ TEXTO VISUAL PARA CARÁTULAS
+// ====================================================================
 function obtenerTextoVisual(nombre) {
   if (!nombre) return '';
-  var texto = String(nombre).trim();
-  var matchAnexo = texto.match(/^(ANEXO\s*\d+(?:\.\d+)*\.?)\s*[-–—.:]*\s*(.*)/i);
+
+  var texto = String(nombre)
+    .replace(/\.pdf$/i, '')
+    .trim();
+
+  // Caso ANEXO: conserva el identificador y expande la descripción.
+  var matchAnexo = texto.match(
+    /^(ANEXO\s*\d+(?:\.\d+)*\.?)\s*[-–—.:]*\s*(.*)/i
+  );
 
   if (matchAnexo) {
-    return matchAnexo[1].toUpperCase() + (matchAnexo[2] ? '\n' + matchAnexo[2] : '');
+    var tituloAnexo = matchAnexo[1].toUpperCase();
+    var descripcion = expandirNombreCaratula_(matchAnexo[2] || '');
+
+    return descripcion
+      ? tituloAnexo + '\n' + descripcion
+      : tituloAnexo;
   }
 
-  var matchNum = texto.match(/^(\d+(?:\.\d+)*\.?)\s*[-–—.:]*\s*(.*)/);
-  return matchNum ? matchNum[2] : texto;
+  // Quita solamente la numeración inicial para el texto visual.
+  // Ejemplo: "3. CERT. DE BUSQ. CATASTRAL" -> "CERT. DE BUSQ. CATASTRAL"
+  var matchNum = texto.match(
+    /^(\d+(?:\.\d+)*\.?)\s*[-–—.:]*\s*(.*)/
+  );
+
+  var textoSinNumero = matchNum ? matchNum[2] : texto;
+
+  return expandirNombreCaratula_(textoSinNumero);
 }
 
 function sanitizarNombreArchivo(nombre) {
