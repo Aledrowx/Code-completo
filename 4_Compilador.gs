@@ -2,35 +2,184 @@
 // 🚀 MÓDULO 2: NÚCLEO DEL COMPILADOR AVANZADO
 // ====================================================================
 
-function buscarCaratulaPorNombreExactoContiene_(coversCache, patron) {
-  var patronNorm = normalizarTexto(patron);
-  for (var i = 0; i < coversCache.length; i++) {
-    if (coversCache[i].nameNorm.indexOf(patronNorm) !== -1) return coversCache[i];
+// ====================================================================
+// 🔎 BÚSQUEDA INTELIGENTE DE CARÁTULAS EN TODA LA BIBLIOTECA (C9)
+// ====================================================================
+// La biblioteca C9 se recorre completa, incluyendo todas sus subcarpetas.
+// Para elegir una carátula NO se toma en cuenta la carpeta donde está
+// guardada: se compara únicamente el nombre del PDF con el nombre de la
+// carpeta/documento que necesita carátula.
+//
+// Ejemplos que se consideran equivalentes:
+//   "1. Ficha Diag. Tec. Legal"
+//   "1. FICHA DIAGNOSTICO TECNICO LEGAL.pdf"
+//
+//   "4. Ficha Ruc"
+//   "5. FICHA RUC.pdf"
+//
+// Los números iniciales se ignoran para la comparación y se reconocen
+// abreviaciones frecuentes (Diag. = Diagnóstico, Tec. = Técnico, etc.).
+// ====================================================================
+
+function normalizarNombreCaratula_(texto) {
+  var t = normalizarTexto(limpiarNombrePDF(String(texto || '')));
+
+  if (!t) return '';
+
+  // Convertir signos a espacios para comparar por palabras.
+  t = t
+    .replace(/[._\-–—:;,()\[\]{}]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Unificar abreviaciones comunes de las carpetas/carátulas.
+  var reemplazos = {
+    'diag': 'diagnostico',
+    'diagn': 'diagnostico',
+    'tec': 'tecnico',
+    'cert': 'certificado',
+    'busq': 'busqueda',
+    'bus': 'busqueda',
+    'doc': 'documento',
+    'fot': 'fotografico',
+    'foto': 'fotografico',
+    'reg': 'registro'
+  };
+
+  var palabras = t.split(' ').filter(Boolean).map(function(palabra) {
+    return reemplazos[palabra] || palabra;
+  });
+
+  // Estas palabras no aportan mucho a la identidad del nombre.
+  var ignorar = {
+    'de': true,
+    'del': true,
+    'la': true,
+    'el': true,
+    'los': true,
+    'las': true,
+    'y': true
+  };
+
+  palabras = palabras.filter(function(palabra) {
+    return !ignorar[palabra];
+  });
+
+  return palabras.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function calcularCoincidenciaCaratula_(objetivo, candidato) {
+  if (!objetivo || !candidato) return 0;
+
+  // Coincidencia exacta después de normalizar.
+  if (objetivo === candidato) return 10000;
+
+  // Si uno contiene completamente al otro, es una coincidencia fuerte.
+  if (
+    candidato.indexOf(objetivo) !== -1 ||
+    objetivo.indexOf(candidato) !== -1
+  ) {
+    return 8000 - Math.abs(objetivo.length - candidato.length);
   }
-  return null;
+
+  var palabrasObjetivo = objetivo.split(' ').filter(Boolean);
+  var palabrasCandidato = candidato.split(' ').filter(Boolean);
+
+  if (!palabrasObjetivo.length || !palabrasCandidato.length) return 0;
+
+  var mapaCandidato = {};
+  palabrasCandidato.forEach(function(p) {
+    mapaCandidato[p] = true;
+  });
+
+  var coincidencias = 0;
+  palabrasObjetivo.forEach(function(p) {
+    if (mapaCandidato[p]) coincidencias++;
+  });
+
+  if (!coincidencias) return 0;
+
+  var cobertura = coincidencias / palabrasObjetivo.length;
+  var precision = coincidencias / palabrasCandidato.length;
+  var f1 = (2 * cobertura * precision) / (cobertura + precision);
+
+  // Premiar que coincidan la primera y última palabra.
+  var bono = 0;
+  if (palabrasObjetivo[0] === palabrasCandidato[0]) bono += 80;
+  if (
+    palabrasObjetivo[palabrasObjetivo.length - 1] ===
+    palabrasCandidato[palabrasCandidato.length - 1]
+  ) bono += 80;
+
+  return Math.round(f1 * 1000) + bono;
+}
+
+function buscarMejorCaratulaPorNombre_(coversCache, nombreBuscado, permitirParcial) {
+  var objetivo = normalizarNombreCaratula_(nombreBuscado);
+  if (!objetivo) return null;
+
+  var mejor = null;
+  var mejorPuntaje = -1;
+
+  for (var i = 0; i < coversCache.length; i++) {
+    var candidato = coversCache[i];
+    var nombreCandidato = normalizarNombreCaratula_(candidato.name);
+    if (!nombreCandidato) continue;
+
+    var puntaje = calcularCoincidenciaCaratula_(objetivo, nombreCandidato);
+
+    // Una coincidencia exacta es suficiente.
+    if (puntaje === 10000) return candidato;
+
+    if (puntaje > mejorPuntaje) {
+      mejorPuntaje = puntaje;
+      mejor = candidato;
+    }
+  }
+
+  // Cuando se pide exactitud, también se acepta una coincidencia de
+  // contenido muy fuerte, pero no una coincidencia débil por palabras.
+  if (!permitirParcial) {
+    return mejorPuntaje >= 7800 ? mejor : null;
+  }
+
+  // Umbral para coincidencias parciales por nombre.
+  return mejorPuntaje >= 550 ? mejor : null;
+}
+
+function buscarCaratulaPorNombreExactoContiene_(coversCache, patron) {
+  return buscarMejorCaratulaPorNombre_(coversCache, patron, true);
 }
 
 function buscarCaratulaPorContenidoNorm_(coversCache, subcadena) {
-  return buscarCaratulaPorNombreExactoContiene_(coversCache, subcadena);
+  return buscarMejorCaratulaPorNombre_(coversCache, subcadena, true);
 }
 
 function obtenerCaratulaEspecial_(nombreArchivo, coversCache) {
   var texto = simplificar(nombreArchivo);
+
   if (texto.indexOf('reniec') !== -1 || texto.indexOf('dni') !== -1) {
-    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'reniec');
+    return buscarMejorCaratulaPorNombre_(coversCache, 'ficha reniec', true) ||
+      buscarMejorCaratulaPorNombre_(coversCache, 'reniec', true);
   }
+
   if (texto.indexOf('ruc') !== -1) {
-    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'ruc');
+    return buscarMejorCaratulaPorNombre_(coversCache, 'ficha ruc', true) ||
+      buscarMejorCaratulaPorNombre_(coversCache, 'ruc', true);
   }
+
   if (texto.indexOf('declaracion') !== -1 || texto.indexOf('jurada') !== -1) {
-    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'declaracion jurada');
+    return buscarMejorCaratulaPorNombre_(coversCache, 'declaracion jurada', true);
   }
+
   if (texto.indexOf('partida') !== -1 || texto.indexOf('registral') !== -1) {
-    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'partida registral');
+    return buscarMejorCaratulaPorNombre_(coversCache, 'partida registral', true);
   }
+
   if (texto.indexOf('constancia') !== -1 || texto.indexOf('posesion') !== -1) {
-    return buscarCaratulaPorNombreExactoContiene_(coversCache, 'constancia de posesion');
+    return buscarMejorCaratulaPorNombre_(coversCache, 'constancia de posesion', true);
   }
+
   return null;
 }
 
@@ -39,44 +188,42 @@ function extraerTodasLasCaratulas_(carpeta) {
 
   function recorrer(folder) {
     var archivos = folder.getFilesByType(MimeType.PDF);
+
     while (archivos.hasNext()) {
       var file = archivos.next();
-      lista.push({ id: file.getId(), name: file.getName(), nameNorm: normalizarTexto(file.getName()) });
+      lista.push({
+        id: file.getId(),
+        name: file.getName(),
+        nameNorm: normalizarTexto(file.getName())
+      });
     }
 
+    // IMPORTANTE: recorre TODAS las subcarpetas de C9.
+    // No se restringe por INFORME 1, INFORME 2, etc.
     var subs = folder.getFolders();
-    while (subs.hasNext()) recorrer(subs.next());
+    while (subs.hasNext()) {
+      recorrer(subs.next());
+    }
   }
 
   recorrer(carpeta);
+
   lista.sort(function(a, b) {
-    return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
+    return a.name.localeCompare(b.name, 'es', {
+      numeric: true,
+      sensitivity: 'base'
+    });
   });
+
   return lista;
 }
 
 function encontrarCaratulaPorCarpeta_(nombreCarpeta, listaCaratulas, permitirParcial) {
-  // simplificar() deja solo letras y números (quita puntos, comas, espacios,
-  // guiones...) para que "Cert. de Busq. Catastral" y "Cert de Busq Catastral"
-  // (o "CERT.DE BUSQ.CATASTRAL") se reconozcan como el mismo nombre.
-  var nombreNorm = simplificar(limpiarNombrePDF(nombreCarpeta));
-  if (!nombreNorm) return null;
-
-  for (var i = 0; i < listaCaratulas.length; i++) {
-    var coverNorm = simplificar(limpiarNombrePDF(listaCaratulas[i].name));
-    if (coverNorm === nombreNorm) return listaCaratulas[i];
-  }
-
-  if (permitirParcial) {
-    for (var j = 0; j < listaCaratulas.length; j++) {
-      var parcialNorm = simplificar(limpiarNombrePDF(listaCaratulas[j].name));
-      if (parcialNorm && (parcialNorm.indexOf(nombreNorm) !== -1 || nombreNorm.indexOf(parcialNorm) !== -1)) {
-        return listaCaratulas[j];
-      }
-    }
-  }
-
-  return null;
+  return buscarMejorCaratulaPorNombre_(
+    listaCaratulas,
+    nombreCarpeta,
+    permitirParcial
+  );
 }
 
 function obtenerDatosParaCompilar(seleccionados) {
@@ -87,55 +234,61 @@ function obtenerDatosParaCompilar(seleccionados) {
   var idBiblioteca = obtenerIdBibliotecaCaratulas_(nombreHoja);
   var filtrados = filtrarSeleccionadosMasEspecificos(seleccionados);
 
-  if (!filtrados.length) throw new Error('No quedaron carpetas válidas después de eliminar selecciones duplicadas padre/hijo.');
+  if (!filtrados.length) {
+    throw new Error(
+      'No quedaron carpetas válidas después de eliminar selecciones duplicadas padre/hijo.'
+    );
+  }
 
+  // Orden natural de las carpetas seleccionadas.
   filtrados.sort(function(a, b) {
-    return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' });
+    return a.name.localeCompare(b.name, 'es', {
+      numeric: true,
+      sensitivity: 'base'
+    });
   });
 
-  var caratulas = extraerTodasLasCaratulas_(DriveApp.getFolderById(idBiblioteca));
+  // Lee recursivamente TODA la biblioteca configurada en C9.
+  // No importa en qué subcarpeta esté guardada cada carátula.
+  var caratulas = extraerTodasLasCaratulas_(
+    DriveApp.getFolderById(idBiblioteca)
+  );
+
   var compilaciones = [];
-  var caratulasMacroUsadas = {};
 
   for (var i = 0; i < filtrados.length; i++) {
     var sel = filtrados[i];
     var origen = DriveApp.getFolderById(sel.id);
     var ruta = obtenerRutaDesdeOrigen(sel.id, idC2);
     var primerOrden = determinarPrimerOrden_(sel, ruta, idC2);
-    var grupo = determinarGrupoAnexo_(primerOrden);
     var secuencia = [];
     var alertas = [];
 
-    // En los Anexos 11 y 13, la carátula general del anexo se incorpora
-    // una sola vez y únicamente en el primer código real del grupo.
-    if (
-      grupo &&
-      !caratulasMacroUsadas[grupo] &&
-      esPrimerCodigoRealAnexoEspecial_(sel.id, idC2, grupo)
-    ) {
-      var macro = buscarCaratulaMacroAnexo_(grupo, primerOrden, caratulas);
-
-      if (macro) {
-        secuencia.push({
-          id: macro.id,
-          name: macro.name,
-          type: 'Carátula General del ' + grupo
-        });
-        caratulasMacroUsadas[grupo] = true;
-      } else {
-        alertas.push(
-          '⚠️ No se encontró la carátula general de ' + grupo +
-          ' para incorporarla al primer código'
-        );
-      }
-    }
-
-    var principal = encontrarCaratulaPorCarpeta_(sel.name, caratulas, false);
+    // ================================================================
+    // 1) CARÁTULA PRINCIPAL DEL CÓDIGO / CARPETA SELECCIONADA
+    // ================================================================
+    // Primero se busca por nombre en TODA C9. Si no existe, se conserva
+    // tu comportamiento actual: generar la carátula principal al vuelo.
+    var principal = encontrarCaratulaPorCarpeta_(
+      sel.name,
+      caratulas,
+      false
+    );
 
     if (!principal) {
-      principal = generarCaratulaPrincipalFaltante_(sel.name, idBiblioteca, nombreHoja, caratulas);
+      principal = generarCaratulaPrincipalFaltante_(
+        sel.name,
+        idBiblioteca,
+        nombreHoja,
+        caratulas
+      );
+
       if (!principal) {
-        alertas.push('⚠️ No se pudo generar la carátula principal de "' + sel.name + '"');
+        alertas.push(
+          '⚠️ No se pudo generar la carátula principal de "' +
+          sel.name +
+          '"'
+        );
       }
     }
 
@@ -147,19 +300,26 @@ function obtenerDatosParaCompilar(seleccionados) {
       });
     }
 
-    if (grupo === 'ANEXO 11') {
-      var resultado11 = construirSecuenciaAnexo11_(origen, caratulas);
-      secuencia = secuencia.concat(resultado11.archivos);
-      if (resultado11.alerta) alertas.push(resultado11.alerta);
-    } else if (grupo === 'ANEXO 13') {
-      secuencia = secuencia.concat(
-        rastrearAnexo13_(origen, true, false, caratulas)
-      );
-    } else {
-      secuencia = secuencia.concat(rastrearGenerico_(origen, true, caratulas));
-    }
+    // ================================================================
+    // 2) RECORRIDO UNIVERSAL DE LA ESTRUCTURA
+    // ================================================================
+    // Ya NO depende de nombres como "ANEXO 11" o "ANEXO 13".
+    // Puede llamarse de cualquier forma.
+    //
+    // rastrearGenerico_ recorre TODAS las subcarpetas recursivamente y,
+    // para cada carpeta con contenido, busca en TODA C9 la carátula cuyo
+    // nombre sea igual o tenga la mejor coincidencia.
+    secuencia = secuencia.concat(
+      rastrearGenerico_(
+        origen,
+        true,
+        caratulas
+      )
+    );
 
+    // Evitar repetir el mismo PDF/caratula por ID.
     secuencia = eliminarDuplicadosPorId_(secuencia);
+
     compilaciones.push({
       nombreCarpeta: sel.name,
       archivos: secuencia,
@@ -168,7 +328,10 @@ function obtenerDatosParaCompilar(seleccionados) {
     });
   }
 
-  return { idC6: idC6, compilaciones: compilaciones };
+  return {
+    idC6: idC6,
+    compilaciones: compilaciones
+  };
 }
 
 // ====================================================================
@@ -337,77 +500,13 @@ function esPrimerCodigoRealAnexoEspecial_(folderId, idOrigen, grupo) {
 }
 
 function construirSecuenciaAnexo11_(origen, caratulas) {
-  var encontrados = [];
-  var existeCarpetaCBC = false;
-
-  function recorrer(folder, contexto) {
-    var nombre = normalizarTexto(folder.getName());
-    var nuevoContexto = {
-      cbc: contexto.cbc || nombre.indexOf('cbc') !== -1 || nombre.indexOf('certificado') !== -1 || nombre.indexOf('catastral') !== -1,
-      informe: contexto.informe || nombre.indexOf('informe') !== -1
-    };
-
-    if (nuevoContexto.cbc) existeCarpetaCBC = true;
-
-    var files = folder.getFilesByType(MimeType.PDF);
-    while (files.hasNext()) {
-      encontrados.push({ file: files.next(), contexto: nuevoContexto });
-    }
-
-    var subs = folder.getFolders();
-    while (subs.hasNext()) recorrer(subs.next(), nuevoContexto);
-  }
-
-  recorrer(origen, { cbc: false, informe: false });
-
-  var bloques = { b1: [], b2: [], b3: [], b4: [], b5: [] };
-
-  encontrados.forEach(function(item) {
-    var nombre = simplificar(item.file.getName());
-    if (nombre.indexOf('diagnosticotecnicolegal') !== -1 || nombre.indexOf('fichadediagnostico') !== -1) {
-      bloques.b1.push(item.file);
-    } else if (nombre.indexOf('plandesaneamiento') !== -1) {
-      bloques.b2.push(item.file);
-    } else if (item.contexto.cbc || nombre.indexOf('certificadodebusqueda') !== -1) {
-      bloques.b4.push(item.file);
-    } else if (item.contexto.informe || nombre.indexOf('informetecnico') !== -1) {
-      bloques.b5.push(item.file);
-    } else {
-      bloques.b3.push(item.file);
-    }
-  });
-
-  ordenarFiles_(bloques.b1);
-  ordenarFiles_(bloques.b2);
-  ordenarFiles_(bloques.b5);
-
-  var planosNormales = [];
-  var planosPP = [];
-  bloques.b3.forEach(function(file) {
-    var sinNumero = simplificar(file.getName()).replace(/^\d+/, '');
-    (sinNumero.indexOf('pp') === 0 ? planosPP : planosNormales).push(file);
-  });
-  ordenarFiles_(planosNormales);
-  ordenarFiles_(planosPP);
-  bloques.b3 = planosNormales.concat(planosPP);
-
-  bloques.b4.sort(function(a, b) {
-    var aGeneral = normalizarTexto(a.getName()).indexOf('general') !== -1;
-    var bGeneral = normalizarTexto(b.getName()).indexOf('general') !== -1;
-    if (aGeneral !== bGeneral) return aGeneral ? -1 : 1;
-    return a.getName().localeCompare(b.getName(), 'es', { numeric: true, sensitivity: 'base' });
-  });
-
-  var secuencia = [];
-  agregarBloque_(secuencia, bloques.b1, caratulas, 'diagnostico tecnico legal');
-  agregarBloque_(secuencia, bloques.b2, caratulas, 'plan de saneamiento');
-  agregarBloque_(secuencia, bloques.b3, caratulas, 'planos diagnostico');
-  agregarBloque_(secuencia, bloques.b4, caratulas, 'certificado de busqueda');
-  agregarBloque_(secuencia, bloques.b5, caratulas, 'informe tecnico diagnostico');
-
+  // ANEXO 11 ya no usa nombres fijos de carátula por bloque.
+  // Se recorre la estructura real del expediente y, para cada subcarpeta,
+  // se busca en TODA la biblioteca C9 la carátula con el nombre igual o
+  // más coincidente.
   return {
-    archivos: secuencia,
-    alerta: existeCarpetaCBC && !bloques.b4.length ? '⚠️ Carpeta de Certificado Catastral vacía' : ''
+    archivos: rastrearGenerico_(origen, true, caratulas),
+    alerta: ''
   };
 }
 
