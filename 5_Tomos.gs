@@ -223,11 +223,39 @@ function procesarCalculoMatematico(seleccionados, config) {
 
   tomos = absorberTomosPequenosSeguro_(tomos, config);
 
+  // ================================================================
+  // SELECCIÓN MANUAL DE PDF
+  // ================================================================
+  // Conserva el modo manual/rango: se trabajan SOLO los PDF marcados.
+  // Si caben dentro del límite configurado, forman un solo tomo.
+  // Si lo superan, se dividen automáticamente en 2, 3, 4... tomos,
+  // respetando el mismo límite usado por la proyección general.
+  //
+  // Ejemplos:
+  //   - 12 PDF / 180 páginas con límite 500 -> 1 tomo
+  //   - 40 PDF / 762 páginas con límite 500 -> 2 tomos
+  //   - límite 200 -> se recalcula con máximo 200 por tomo
+  // ================================================================
   if (archivosManual.length) {
-    var tomoManual = crearTomoVacio_(tomos.length + 1);
-    archivosManual.forEach(function(pdf) { agregarPdfATomo_(tomoManual, pdf); });
-    tomoManual.excedeLimite = tomoManual.totalContenido > capacidadContenido;
-    tomos.push(tomoManual);
+    var tomoManualActual = crearTomoVacio_(tomos.length + 1);
+
+    archivosManual.forEach(function(pdf) {
+      // Si el tomo ya tiene contenido y el siguiente PDF haría superar
+      // la capacidad disponible, cerramos el tomo y abrimos otro.
+      if (
+        tomoManualActual.archivos.length &&
+        tomoManualActual.totalContenido + pdf.paginasFisicas > capacidadContenido
+      ) {
+        tomos.push(tomoManualActual);
+        tomoManualActual = crearTomoVacio_(tomos.length + 1);
+      }
+
+      agregarPdfATomo_(tomoManualActual, pdf);
+    });
+
+    if (tomoManualActual.archivos.length) {
+      tomos.push(tomoManualActual);
+    }
   }
 
   recalcularTomos_(tomos, config);
@@ -408,13 +436,60 @@ function recalcularTomos_(tomos, config) {
 function seleccionarTomos_(tomos, config) {
   var texto = String((config && config.numerosTomos) || '').trim();
   if (!texto) return tomos.slice();
+
   var elegidos = {};
-  texto.split(',').forEach(function(valor) {
-    var n = parseInt(valor.trim(), 10);
-    if (!isNaN(n) && n > 0) elegidos[n] = true;
+
+  // Admite:
+  //   1,3,5
+  //   17-28
+  //   1,4,8-12
+  //   17 a 28
+  // También acepta ; como separador.
+  texto
+    .replace(/;/g, ',')
+    .split(',')
+    .forEach(function(parte) {
+      var valor = String(parte || '').trim();
+      if (!valor) return;
+
+      var rango = valor.match(/^(\d+)\s*(?:-|–|—|a)\s*(\d+)$/i);
+
+      if (rango) {
+        var desde = parseInt(rango[1], 10);
+        var hasta = parseInt(rango[2], 10);
+
+        if (desde < 1 || hasta < 1) return;
+
+        if (desde > hasta) {
+          throw new Error(
+            'Rango de tomos inválido: "' + valor + '". ' +
+            'El número inicial debe ser menor o igual que el final.'
+          );
+        }
+
+        for (var n = desde; n <= hasta; n++) {
+          elegidos[n] = true;
+        }
+        return;
+      }
+
+      if (/^\d+$/.test(valor)) {
+        var numero = parseInt(valor, 10);
+        if (numero > 0) elegidos[numero] = true;
+      }
+    });
+
+  var seleccionados = tomos.filter(function(tomo) {
+    return Boolean(elegidos[tomo.numero]);
   });
-  var seleccionados = tomos.filter(function(tomo) { return Boolean(elegidos[tomo.numero]); });
-  if (!seleccionados.length) throw new Error('No se indicó ningún número de tomo válido.');
+
+  if (!seleccionados.length) {
+    throw new Error(
+      'No se indicó ningún número de tomo válido. ' +
+      'Ejemplos válidos: 1,3,5 | 17-28 | 1,4,8-12.'
+    );
+  }
+
   return seleccionados;
 }
 
