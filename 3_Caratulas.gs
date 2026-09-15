@@ -198,9 +198,11 @@ function procesarSeleccionados(lote, configUbicacion, configCaratula) {
 
 
 
-      // Nombre de salida; se conserva tal cual viene del elemento seleccionado.
+      // Nombre final del PDF. Debe calcularse ANTES de buscar reutilizaciones.
+      var filenameFinal =
+        sanitizarNombreArchivo(item.name.trim().toUpperCase()) + '.PDF';
 
-      // ♻️ Reutilizar carátula ya existente en C4 antes de crear carpetas.
+      // ♻️ Reutilizar carátula ya existente en la biblioteca C9 antes de crear carpetas.
       if (!soloCarpetas) {
         var caratulaCompartida =
           obtenerCaratulaCompartidaPorNombre_(
@@ -323,10 +325,6 @@ function procesarSeleccionados(lote, configUbicacion, configCaratula) {
 
       var textoLimpio = limpiarTextoSinPrefijoAvanzado(item.name);
 
-      var filenameFinal =
-
-        sanitizarNombreArchivo(item.name.trim().toUpperCase()) + '.PDF';
-
 
 
       // Conserva las reglas especiales ya usadas en los Anexos 11 y 13.
@@ -383,7 +381,14 @@ function procesarSeleccionados(lote, configUbicacion, configCaratula) {
 
         resultado.omitidos++;
 
-
+        // Aunque no se cree de nuevo, se devuelve el archivo existente
+        // para que WebPanel pueda vincularlo a la solicitud correspondiente.
+        resultado.archivosGenerados.push({
+          origen: item.name,
+          id: existente.getId(),
+          url: existente.getUrl(),
+          name: existente.getName()
+        });
 
         logs.push(crearFilaActividadCaratulas_(
 
@@ -391,7 +396,7 @@ function procesarSeleccionados(lote, configUbicacion, configCaratula) {
 
           filenameFinal,
 
-          '⏭️ Carátula omitida: ya existía',
+          '♻️ Carátula reutilizada: ya existía en destino',
 
           existente.getUrl(),
 
@@ -441,7 +446,16 @@ function procesarSeleccionados(lote, configUbicacion, configCaratula) {
 
       });
 
-
+      // Actualizar el índice de esta misma ejecución para evitar duplicados
+      // si el mismo nombre aparece otra vez en otro lote/selección.
+      try {
+        var claveNueva = normalizarTexto(String(pdfCreado.name || filenameFinal).trim());
+        if (claveNueva && !indiceCaratulasCompartidas[claveNueva]) {
+          indiceCaratulasCompartidas[claveNueva] = DriveApp.getFileById(pdfCreado.id);
+        }
+      } catch (errorIndice) {
+        console.warn('No se pudo actualizar el índice de carátulas: ' + errorIndice.message);
+      }
 
       logs.push(crearFilaActividadCaratulas_(
 
@@ -539,7 +553,7 @@ function construirMensajeCaratulas_(resultado) {
 
     'PDF creados: ' + resultado.pdfsCreados,
 
-    'Omitidos por existir: ' + resultado.omitidos,
+    'Reutilizados por existir: ' + resultado.omitidos,
 
     'Actividades registradas: ' + Number(resultado.registrosAgregados || 0)
 
